@@ -1,0 +1,62 @@
+server:
+  port: "8081"
+  data_dir: "data"
+
+llm:
+  provider: "deepseek"
+  api_key: ""
+  base_url: "https://api.deepseek.com"
+  max_retries: 3
+  timeout: 120
+  models:
+    writer: "deepseek-chat"
+    architect: "deepseek-reasoner"
+    editor: "deepseek-chat"
+    reviewer: "deepseek-chat"
+    auditor: "deepseek-reasoner"
+    timekeeper: "deepseek-chat"
+    summary: "deepseek-chat"
+  temperatures:
+    writer: 1.5
+    architect: 1.0
+    editor: 0.7
+    reviewer: 0.5
+    auditor: 0.6
+    timekeeper: 0.1
+    summary: 0.5
+
+storage:
+  projects_dir: "data/projects"
+  vector_db_dir: "data/vector_db"
+
+vector_store:
+  chunk_size: 500
+  overlap: 100
+
+pricing:
+  deepseek-chat:
+    input: 0.00194
+    output: 0.00792
+  deepseek-reasoner:
+    input: 0.00396
+    output: 0.01577
+  gpt-4:
+    input: 0.216
+    output: 0.432
+  gpt-4-turbo:
+    input: 0.072
+    output: 0.216
+  gpt-3.5-turbo:
+    input: 0.0036
+    output: 0.0108
+  claude-3-opus:
+    input: 0.108
+    output: 0.54
+  claude-3-sonnet:
+    input: 0.0216
+    output: 0.108
+  claude-3-haiku:
+    input: 0.0018
+    output: 0.009
+
+last_open_book: ""
