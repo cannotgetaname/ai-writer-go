@@ -1,6 +1,57 @@
 # AI Writer - AI辅助小说创作工具
 
+[![Release](https://img.shields.io/github/v/release/cannotgetaname/ai-writer-go)](https://github.com/cannotgetaname/ai-writer-go/releases)
+[![License](https://img.shields.io/github/license/cannotgetaname/ai-writer-go)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org)
+[![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D?logo=vue.js)](https://vuejs.org)
+
 一个基于 Go + Vue 3 的 AI 辅助小说创作工具，支持 CLI 和 Web UI 两种使用方式。
+
+## 下载安装
+
+### 预编译版本
+
+从 [Releases](https://github.com/cannotgetaname/ai-writer-go/releases) 页面下载对应平台的版本：
+
+| 平台 | 架构 | 文件 |
+|------|------|------|
+| Linux | x86_64 | ai-writer-linux-amd64.tar.gz |
+| Linux | ARM64 | ai-writer-linux-arm64.tar.gz |
+| Windows | x86_64 | ai-writer-windows-amd64.zip |
+
+**Linux 安装：**
+```bash
+# 下载并解压
+wget https://github.com/cannotgetaname/ai-writer-go/releases/download/v1.0.0/ai-writer-linux-amd64.tar.gz
+tar -xzvf ai-writer-linux-amd64.tar.gz
+
+# 配置
+cp config.example.yaml config.yaml
+vim config.yaml  # 填入你的 API Key
+
+# 启动
+./start-linux.sh
+```
+
+**Windows 安装：**
+1. 下载并解压 `ai-writer-windows-amd64.zip`
+2. 复制 `config.example.yaml` 为 `config.yaml`
+3. 编辑 `config.yaml` 填入你的 API Key
+4. 双击 `start-windows.bat` 启动
+
+### 从源码编译
+
+```bash
+# 克隆仓库
+git clone https://github.com/cannotgetaname/ai-writer-go.git
+cd ai-writer-go
+
+# 编译后端
+go build -o ai-writer .
+
+# 构建前端
+cd web && npm install && npm run build
+```
 
 ## 功能特性
 
@@ -57,9 +108,11 @@ ai-writer tool title --genre 玄幻
 
 ### Web UI
 
+访问 http://localhost:8081 即可使用 Web UI。
+
 - **书籍管理**: 创建、编辑、删除书籍项目
 - **章节编辑**: 编写章节内容，AI 生成、续写
-- **批量生成**: 流水线式批量生成章节
+- **批量生成**: 流水线式批量生成章节，支持断点续传
 - **状态同步**: 从章节提取状态变更并应用
 - **导出功能**: 支持 txt/markdown/json 格式
 - **时间线**: 可视化故事时间线
@@ -72,43 +125,6 @@ ai-writer tool title --genre 玄幻
 - **前端**: Vue 3, Element Plus, ECharts
 - **存储**: JSON 文件存储
 - **LLM**: 支持 DeepSeek / OpenAI / Ollama
-
-## 快速开始
-
-### 安装
-
-```bash
-# 克隆仓库
-git clone https://github.com/cannotgetaname/ai-writer-go.git
-cd ai-writer-go
-
-# 编译后端
-go build -o ai-writer .
-
-# 安装前端依赖
-cd web && npm install
-```
-
-### 配置
-
-```bash
-# 复制示例配置
-cp configs/config.example.yaml config.yaml
-
-# 编辑配置文件，填入 API Key
-vim config.yaml
-```
-
-### 运行
-
-```bash
-# 启动 Web 服务
-./ai-writer server
-
-# 或使用 CLI
-./ai-writer book create my-novel
-./ai-writer -b my-novel write 1 --stream
-```
 
 ## 项目结构
 
@@ -149,6 +165,29 @@ data/projects/{book_name}/
 ├── threads.json         # 叙事线程
 └── chapters/
     └── 1.json           # 章节内容
+```
+
+## 配置说明
+
+编辑 `config.yaml` 文件：
+
+```yaml
+llm:
+  provider: deepseek           # deepseek / openai / ollama
+  api_key: your-api-key        # API 密钥
+  base_url: https://api.deepseek.com
+  models:
+    writer: deepseek-chat      # 写作模型
+    architect: deepseek-reasoner  # 架构师模型
+    reviewer: deepseek-chat    # 审稿模型
+  temperatures:
+    writer: 1.5                # 写作温度 (0-2)
+    architect: 1.0
+    reviewer: 0.5
+
+server:
+  port: "8081"
+  data_dir: "data"
 ```
 
 ## License
