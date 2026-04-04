@@ -1,7 +1,7 @@
 # AI Writer - AI辅助小说创作工具
 
 [![Release](https://img.shields.io/github/v/release/cannotgetaname/ai-writer-go)](https://github.com/cannotgetaname/ai-writer-go/releases)
-[![License](https://img.shields.io/github/license/cannotgetaname/ai-writer-go)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D?logo=vue.js)](https://vuejs.org)
 
