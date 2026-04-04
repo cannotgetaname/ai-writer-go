@@ -1,0 +1,156 @@
+# AI Writer - AI辅助小说创作工具
+
+一个基于 Go + Vue 3 的 AI 辅助小说创作工具，支持 CLI 和 Web UI 两种使用方式。
+
+## 功能特性
+
+### CLI 命令
+
+```bash
+# 书籍管理
+ai-writer book list
+ai-writer book create <name>
+ai-writer book delete <name>
+ai-writer book info
+ai-writer book use <name>
+
+# 章节管理
+ai-writer chapter list
+ai-writer chapter show <id>
+ai-writer chapter add --title "第一章"
+ai-writer chapter edit <id>
+ai-writer chapter delete <id>
+
+# AI 写作
+ai-writer write <chapter_id> --stream
+ai-writer continue --words 500
+
+# 批量生成
+ai-writer batch generate --from 1 --to 50
+ai-writer batch continue
+ai-writer batch status
+ai-writer batch reset
+
+# 审稿和审计
+ai-writer review <chapter_id> --fix
+ai-writer audit
+
+# 状态同步
+ai-writer sync extract <chapter_id>
+ai-writer sync pending
+ai-writer sync apply
+ai-writer sync reject
+
+# 导出
+ai-writer export txt
+ai-writer export markdown
+ai-writer export json
+
+# 智能工具箱
+ai-writer tool naming --type person --genre 玄幻
+ai-writer tool character --type 主角 --gender 男
+ai-writer tool conflict --type 人物冲突
+ai-writer tool scene --type 战斗
+ai-writer tool goldfinger --type 系统
+ai-writer tool title --genre 玄幻
+```
+
+### Web UI
+
+- **书籍管理**: 创建、编辑、删除书籍项目
+- **章节编辑**: 编写章节内容，AI 生成、续写
+- **批量生成**: 流水线式批量生成章节
+- **状态同步**: 从章节提取状态变更并应用
+- **导出功能**: 支持 txt/markdown/json 格式
+- **时间线**: 可视化故事时间线
+- **知识图谱**: 展示人物、地点、物品关系
+- **系统配置**: 模型设置、提示词配置、费用统计
+
+## 技术栈
+
+- **后端**: Go 1.21+, Gin, Cobra CLI
+- **前端**: Vue 3, Element Plus, ECharts
+- **存储**: JSON 文件存储
+- **LLM**: 支持 DeepSeek / OpenAI / Ollama
+
+## 快速开始
+
+### 安装
+
+```bash
+# 克隆仓库
+git clone https://github.com/cannotgetaname/ai-writer-go.git
+cd ai-writer-go
+
+# 编译后端
+go build -o ai-writer .
+
+# 安装前端依赖
+cd web && npm install
+```
+
+### 配置
+
+```bash
+# 复制示例配置
+cp configs/config.example.yaml config.yaml
+
+# 编辑配置文件，填入 API Key
+vim config.yaml
+```
+
+### 运行
+
+```bash
+# 启动 Web 服务
+./ai-writer server
+
+# 或使用 CLI
+./ai-writer book create my-novel
+./ai-writer -b my-novel write 1 --stream
+```
+
+## 项目结构
+
+```
+ai-writer-go/
+├── cmd/                    # CLI 命令
+├── internal/
+│   ├── api/               # REST API
+│   ├── config/            # 配置管理
+│   ├── engine/            # 高级引擎（因果链、叙事线程等）
+│   ├── llm/               # LLM 客户端
+│   ├── model/             # 数据模型
+│   ├── service/           # 业务逻辑
+│   └── store/             # 存储层
+├── web/                    # Vue 前端
+│   └── src/
+│       ├── api/           # API 客户端
+│       ├── router/        # 路由配置
+│       └── views/         # Vue 组件
+├── configs/               # 示例配置
+└── main.go
+```
+
+## 数据存储
+
+所有数据存储在 `data/projects/{book_name}/` 目录下：
+
+```
+data/projects/{book_name}/
+├── metadata.json        # 书籍元数据
+├── structure.json       # 章节结构
+├── characters.json      # 人物设定
+├── items.json           # 物品设定
+├── locations.json       # 地点设定
+├── worldview.json       # 世界观
+├── foreshadows.json     # 伏笔追踪
+├── causal_chains.json   # 因果链
+├── threads.json         # 叙事线程
+└── chapters/
+    └── 1.json           # 章节内容
+```
+
+## License
+
+MIT
