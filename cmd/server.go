@@ -109,9 +109,9 @@ func startDaemon() {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
+
+	// Unix 特定的进程属性
+	setSysProcAttr(cmd)
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "后台启动失败: %v\n", err)
