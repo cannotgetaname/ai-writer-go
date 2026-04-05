@@ -1,6 +1,7 @@
 server:
   port: "8081"
   data_dir: "data"
+  auth_key: ""  # API 认证密钥，留空则跳过认证
 
 llm:
   provider: "deepseek"
@@ -32,6 +33,12 @@ storage:
 vector_store:
   chunk_size: 500
   overlap: 100
+
+embedding:
+  provider: "ollama"
+  model: "embeddinggemma:latest"
+  base_url: "http://localhost:11434"
+  api_key: ""  # 仅 OpenAI 需要
 
 prompts:
   writer_system: |

@@ -431,11 +431,15 @@ func CreateCharacter(c *gin.Context) {
 	bookID := c.Param("id")
 
 	var req struct {
-		Name   string `json:"name" binding:"required"`
-		Role   string `json:"role"`
-		Gender string `json:"gender"`
-		Bio    string `json:"bio"`
-		Status string `json:"status"`
+		Name        string `json:"name" binding:"required"`
+		Role        string `json:"role"`
+		Gender      string `json:"gender"`
+		Bio         string `json:"bio"`
+		Status      string `json:"status"`
+		Faction     string `json:"faction"`
+		Sect        string `json:"sect"`
+		Position    string `json:"position"`
+		Cultivation string `json:"cultivation"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -471,14 +475,18 @@ func CreateCharacter(c *gin.Context) {
 
 	// 创建新人物
 	newChar := &model.Character{
-		ID:        generateID(),
-		BookID:    bookID,
-		Name:      req.Name,
-		Role:      req.Role,
-		Gender:    req.Gender,
-		Bio:       req.Bio,
-		Status:    req.Status,
-		Relations: []model.Relation{},
+		ID:           generateID(),
+		BookID:       bookID,
+		Name:         req.Name,
+		Role:         req.Role,
+		Gender:       req.Gender,
+		Bio:          req.Bio,
+		Status:       req.Status,
+		Faction:      req.Faction,
+		Sect:         req.Sect,
+		Position:     req.Position,
+		Cultivation:  req.Cultivation,
+		Relations:     []model.Relation{},
 	}
 
 	characters = append(characters, newChar)
@@ -498,11 +506,15 @@ func UpdateCharacter(c *gin.Context) {
 	charID := c.Param("char_id")
 
 	var req struct {
-		Name   string `json:"name"`
-		Role   string `json:"role"`
-		Gender string `json:"gender"`
-		Bio    string `json:"bio"`
-		Status string `json:"status"`
+		Name        string `json:"name"`
+		Role        string `json:"role"`
+		Gender      string `json:"gender"`
+		Bio         string `json:"bio"`
+		Status      string `json:"status"`
+		Faction     string `json:"faction"`
+		Sect        string `json:"sect"`
+		Position    string `json:"position"`
+		Cultivation string `json:"cultivation"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -517,31 +529,33 @@ func UpdateCharacter(c *gin.Context) {
 		return
 	}
 
-	// 查找并更新
-	for _, ch := range characters {
-		if ch.ID == charID {
+	// 查找并更新（使用索引访问，避免值拷贝问题）
+	for i := range characters {
+		if characters[i].ID == charID {
 			if req.Name != "" {
-				ch.Name = req.Name
+				characters[i].Name = req.Name
 			}
 			if req.Role != "" {
-				ch.Role = req.Role
+				characters[i].Role = req.Role
 			}
 			if req.Gender != "" {
-				ch.Gender = req.Gender
+				characters[i].Gender = req.Gender
 			}
-			if req.Bio != "" {
-				ch.Bio = req.Bio
-			}
+			characters[i].Bio = req.Bio
 			if req.Status != "" {
-				ch.Status = req.Status
+				characters[i].Status = req.Status
 			}
+			characters[i].Faction = req.Faction
+			characters[i].Sect = req.Sect
+			characters[i].Position = req.Position
+			characters[i].Cultivation = req.Cultivation
 
 			if err := jsonStore.SaveCharacters(bookID, characters); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 
-			c.JSON(http.StatusOK, ch)
+			c.JSON(http.StatusOK, characters[i])
 			return
 		}
 	}
@@ -610,6 +624,10 @@ func CreateItem(c *gin.Context) {
 		Description string `json:"description"`
 		Origin      string `json:"origin"`
 		Abilities   string `json:"abilities"`
+		Rank        string `json:"rank"`
+		Faction     string `json:"faction"`
+		Sect        string `json:"sect"`
+		Location    string `json:"location"` // 所在地点
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -647,6 +665,10 @@ func CreateItem(c *gin.Context) {
 		Description: req.Description,
 		Origin:      req.Origin,
 		Abilities:   req.Abilities,
+		Rank:        req.Rank,
+		Faction:     req.Faction,
+		Sect:        req.Sect,
+		Location:    req.Location,
 	}
 
 	items = append(items, newItem)
@@ -695,6 +717,66 @@ func DeleteItem(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+}
+
+// UpdateItem 更新物品
+// UpdateItem 更新物品
+func UpdateItem(c *gin.Context) {
+	bookID := c.Param("id")
+	itemID := c.Param("item_id")
+
+	var req struct {
+		Name        string `json:"name"`
+		Type        string `json:"type"`
+		Owner       string `json:"owner"`
+		Description string `json:"description"`
+		Origin      string `json:"origin"`
+		Abilities   string `json:"abilities"`
+		Rank        string `json:"rank"`
+		Faction     string `json:"faction"`
+		Sect        string `json:"sect"`
+		Location    string `json:"location"` // 所在地点
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 加载物品列表
+	items, err := jsonStore.LoadItems(bookID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 查找并更新（使用索引访问，避免值拷贝问题）
+	for i := range items {
+		if items[i].ID == itemID {
+			if req.Name != "" {
+				items[i].Name = req.Name
+			}
+			items[i].Type = req.Type
+			items[i].Owner = req.Owner
+			items[i].Description = req.Description
+			items[i].Origin = req.Origin
+			items[i].Abilities = req.Abilities
+			items[i].Rank = req.Rank
+			items[i].Faction = req.Faction
+			items[i].Sect = req.Sect
+			items[i].Location = req.Location
+
+			if err := jsonStore.SaveItems(bookID, items); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "物品不存在"})
 }
 
 // ListLocations 列出地点
@@ -800,6 +882,57 @@ func DeleteLocation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+}
+
+// UpdateLocation 更新地点
+func UpdateLocation(c *gin.Context) {
+	bookID := c.Param("id")
+	locID := c.Param("loc_id")
+
+	var req struct {
+		Name        string   `json:"name"`
+		Parent      string   `json:"parent"`
+		Neighbors   []string `json:"neighbors"`
+		Faction     string   `json:"faction"`
+		Danger      string   `json:"danger"`
+		Description string   `json:"description"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 加载地点列表
+	locations, err := jsonStore.LoadLocations(bookID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 查找并更新（使用索引访问，避免值拷贝问题）
+	for i := range locations {
+		if locations[i].ID == locID {
+			if req.Name != "" {
+				locations[i].Name = req.Name
+			}
+			locations[i].Parent = req.Parent
+			locations[i].Neighbors = req.Neighbors
+			locations[i].Faction = req.Faction
+			locations[i].Danger = req.Danger
+			locations[i].Description = req.Description
+
+			if err := jsonStore.SaveLocations(bookID, locations); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "地点不存在"})
 }
 
 // ==================== 因果链 ====================

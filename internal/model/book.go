@@ -59,6 +59,11 @@ type Chapter struct {
 	// 叙事线程（新增）
 	ThreadID string `json:"thread_id,omitempty"`
 
+	// 出场实体索引（自动提取）
+	Characters []string `json:"characters,omitempty"` // 出场人物名称列表
+	Items      []string `json:"items,omitempty"`      // 出场物品名称列表
+	Locations  []string `json:"locations,omitempty"`  // 出场地点名称列表
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

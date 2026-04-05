@@ -51,6 +51,11 @@ const routes = [
     component: () => import('@/views/SyncView.vue')
   },
   {
+    path: '/books/:id/analysis',
+    name: 'BookAnalysis',
+    component: () => import('@/views/AnalysisBookView.vue')
+  },
+  {
     path: '/toolbox',
     name: 'Toolbox',
     component: () => import('@/views/ToolboxView.vue')

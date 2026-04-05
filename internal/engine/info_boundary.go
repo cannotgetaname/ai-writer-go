@@ -162,3 +162,33 @@ func (m *InfoBoundaryManager) ExtractInfoFromChapter(ctx context.Context, bookNa
 
 	return infoMap, nil
 }
+
+// ExtractAndSave 提取信息并持久化到角色数据
+func (m *InfoBoundaryManager) ExtractAndSave(ctx context.Context, bookName string, chapterID int) (map[string][]model.KnownInfo, error) {
+	infoMap, err := m.ExtractInfoFromChapter(ctx, bookName, chapterID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(infoMap) == 0 {
+		return infoMap, nil
+	}
+
+	// 持久化到角色数据
+	characters, err := m.store.LoadCharacters(bookName)
+	if err != nil {
+		return infoMap, err
+	}
+
+	for _, char := range characters {
+		if infos, ok := infoMap[char.Name]; ok {
+			char.KnownInfos = append(char.KnownInfos, infos...)
+		}
+	}
+
+	if err := m.store.SaveCharacters(bookName, characters); err != nil {
+		return infoMap, err
+	}
+
+	return infoMap, nil
+}

@@ -63,9 +63,11 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 				bookSettings.DELETE("/characters/:char_id", handler.DeleteCharacter)
 				bookSettings.GET("/items", handler.ListItems)
 				bookSettings.POST("/items", handler.CreateItem)
+				bookSettings.PUT("/items/:item_id", handler.UpdateItem)
 				bookSettings.DELETE("/items/:item_id", handler.DeleteItem)
 				bookSettings.GET("/locations", handler.ListLocations)
 				bookSettings.POST("/locations", handler.CreateLocation)
+				bookSettings.PUT("/locations/:loc_id", handler.UpdateLocation)
 				bookSettings.DELETE("/locations/:loc_id", handler.DeleteLocation)
 			}
 

@@ -33,9 +33,28 @@ type WorldViewCore struct {
 }
 
 type WorldViewElements struct {
-	ImportantItems string `json:"important_items"` // 重要物品
-	Organizations  string `json:"organizations"`   // 势力组织
-	Locations      string `json:"locations"`       // 主要地点
+	ImportantItems string    `json:"important_items"` // 重要物品
+	Organizations  string    `json:"organizations"`   // 势力组织
+	Locations      string    `json:"locations"`       // 主要地点
+	Factions       []Faction `json:"factions,omitempty"` // 势力列表
+}
+
+// FactionRelation 势力关系
+type FactionRelation struct {
+	Name string `json:"name"` // 关联势力名
+	Type string `json:"type"` // ally/enemy/subordinate/neutral
+}
+
+// Faction 势力/组织
+type Faction struct {
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Type        string           `json:"type"`        // 宗门/家族/帮派/帝国/商会
+	Leader      string           `json:"leader"`      // 首领
+	Description string           `json:"description"`
+	Relations   []FactionRelation `json:"relations,omitempty"`   // 关联势力（结构化）
+	Members     []string         `json:"members,omitempty"`     // 成员列表（角色名）
+	Territories []string         `json:"territories,omitempty"` // 领地列表（地点名）
 }
 
 type WorldViewBackground struct {

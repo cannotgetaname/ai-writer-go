@@ -647,3 +647,298 @@ func parseJSONResult(input string, v interface{}) error {
 	jsonStr := input[start : end+1]
 	return json.Unmarshal([]byte(jsonStr), v)
 }
+
+// ==================== 增强审稿 ====================
+
+// FullReviewResult 完整审稿结果
+type FullReviewResult struct {
+	BasicReview        *ReviewResult      `json:"basic_review"`
+	ConsistencyReport  interface{}        `json:"consistency_report,omitempty"`
+	ForeshadowWarnings []ForeshadowWarning `json:"foreshadow_warnings,omitempty"`
+	ThreadWarnings     []string           `json:"thread_warnings,omitempty"`
+	OverallScore       int                `json:"overall_score"`
+	Summary            string             `json:"summary"`
+}
+
+// ForeshadowWarning 伏笔预警
+type ForeshadowWarning struct {
+	ID            string `json:"id"`
+	Content       string `json:"content"`
+	SourceChapter int    `json:"source_chapter"`
+	Gap           int    `json:"gap"`
+	WarningType   string `json:"warning_type"`
+	WarningMsg    string `json:"warning_msg"`
+}
+
+// ReviewChapterFull 完整审稿（集成多项检查）
+func (s *ReviewService) ReviewChapterFull(ctx context.Context, bookName string, chapterID int) (*FullReviewResult, error) {
+	result := &FullReviewResult{}
+
+	// 1. 基础审稿
+	basic, err := s.ReviewChapter(ctx, bookName, chapterID)
+	if err == nil && basic != nil {
+		result.BasicReview = basic
+		result.OverallScore = basic.OverallScore
+	}
+
+	// 2. 一致性检查提示
+	result.ConsistencyReport = map[string]interface{}{
+		"message": "一致性检查需要调用 /api/books/:id/check/consistency 端点",
+	}
+
+	// 3. 伏笔预警
+	foreshadows, _ := s.store.LoadForeshadows(bookName)
+	result.ForeshadowWarnings = s.checkForeshadowWarnings(foreshadows, chapterID)
+
+	// 4. 线程掉线预警
+	threads, _ := s.store.LoadThreads(bookName)
+	result.ThreadWarnings = s.checkThreadWarnings(threads, chapterID)
+
+	// 5. 生成摘要
+	result.Summary = s.generateFullSummary(result)
+
+	return result, nil
+}
+
+// checkForeshadowWarnings 检查伏笔预警
+func (s *ReviewService) checkForeshadowWarnings(foreshadows []*model.Foreshadow, currentChapter int) []ForeshadowWarning {
+	var warnings []ForeshadowWarning
+	const warningThreshold = 10
+
+	for _, fs := range foreshadows {
+		if fs.Status != model.ForeshadowActive {
+			continue
+		}
+
+		gap := currentChapter - fs.SourceChapter
+		if gap > warningThreshold {
+			warnings = append(warnings, ForeshadowWarning{
+				ID:            fs.ID,
+				Content:       fs.Content,
+				SourceChapter: fs.SourceChapter,
+				Gap:           gap,
+				WarningType:   "overdue",
+				WarningMsg:    fmt.Sprintf("伏笔已埋设 %d 章未回收", gap),
+			})
+		}
+	}
+
+	return warnings
+}
+
+// checkThreadWarnings 检查线程掉线预警
+func (s *ReviewService) checkThreadWarnings(threads []*model.NarrativeThread, currentChapter int) []string {
+	var warnings []string
+	const warningThreshold = 5
+
+	for _, thread := range threads {
+		if thread.Status != model.ThreadActive {
+			continue
+		}
+
+		gap := currentChapter - thread.LastActiveChapter
+		if gap > warningThreshold {
+			warnings = append(warnings, fmt.Sprintf("线程【%s】已掉线 %d 章（最后活跃: 第%d章）",
+				thread.Name, gap, thread.LastActiveChapter))
+		}
+	}
+
+	return warnings
+}
+
+// generateFullSummary 生成完整摘要
+func (s *ReviewService) generateFullSummary(result *FullReviewResult) string {
+	var parts []string
+
+	if result.BasicReview != nil {
+		parts = append(parts, fmt.Sprintf("基础评分: %d分", result.OverallScore))
+	}
+
+	if len(result.ForeshadowWarnings) > 0 {
+		parts = append(parts, fmt.Sprintf("%d个伏笔预警", len(result.ForeshadowWarnings)))
+	}
+
+	if len(result.ThreadWarnings) > 0 {
+		parts = append(parts, fmt.Sprintf("%d个线程预警", len(result.ThreadWarnings)))
+	}
+
+	if len(parts) == 0 {
+		return "审稿完成，未发现问题"
+	}
+
+	return strings.Join(parts, "；")
+}
+
+// ParagraphReviewIssue 段落审稿问题
+type ParagraphReviewIssue struct {
+	ParagraphID    string `json:"paragraph_id"`
+	ParagraphIndex int    `json:"paragraph_index"`
+	Type           string `json:"type"`
+	Severity       string `json:"severity"`
+	Description    string `json:"description"`
+	Suggestion     string `json:"suggestion"`
+	OriginalText   string `json:"original_text"`
+}
+
+// ParagraphReviewResult 段落审稿结果
+type ParagraphReviewResult struct {
+	OverallScore    int                    `json:"overall_score"`
+	ParagraphIssues []ParagraphReviewIssue `json:"paragraph_issues"`
+	Suggestions     []string               `json:"suggestions"`
+}
+
+// ReviewChapterByParagraph 按段落审稿章节
+func (s *ReviewService) ReviewChapterByParagraph(ctx context.Context, bookName string, chapterID int) (*ParagraphReviewResult, error) {
+	// 加载章节段落
+	paragraphs, err := s.store.LoadChapterParagraphs(bookName, chapterID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(paragraphs.Paragraphs) == 0 {
+		return nil, fmt.Errorf("章节 %d 没有内容", chapterID)
+	}
+
+	// 加载人物设定
+	characters, _ := s.store.LoadCharacters(bookName)
+
+	// 构建审稿提示词
+	userPrompt := s.buildParagraphReviewPrompt(paragraphs, characters)
+
+	// 调用 LLM
+	systemPrompt := s.prompts.ReviewerSystem
+	result, err := s.llmClient.CallWithSystem(ctx, systemPrompt, userPrompt, "reviewer")
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析结果
+	reviewResult := s.parseParagraphReviewResult(result, paragraphs)
+
+	return reviewResult, nil
+}
+
+// buildParagraphReviewPrompt 构建按段落的审稿提示词
+func (s *ReviewService) buildParagraphReviewPrompt(paragraphs *model.ChapterParagraphs, characters []*model.Character) string {
+	var prompt strings.Builder
+
+	prompt.WriteString("请对以下章节分段落进行审稿。每个段落都有唯一ID，请在指出问题时标注段落ID。\n\n")
+
+	prompt.WriteString("【段落列表】\n")
+	prompt.WriteString("────────────────────────────────\n")
+	for i, p := range paragraphs.Paragraphs {
+		prompt.WriteString(fmt.Sprintf("[段落%d ID: %s]\n", i+1, p.ID))
+		prompt.WriteString(p.Text)
+		prompt.WriteString("\n\n")
+	}
+	prompt.WriteString("────────────────────────────────\n\n")
+
+	if len(characters) > 0 {
+		prompt.WriteString("【人物设定】\n")
+		for _, char := range characters {
+			prompt.WriteString(fmt.Sprintf("- %s(%s): %s\n", char.Name, char.Role, char.Bio))
+		}
+		prompt.WriteString("\n")
+	}
+
+	prompt.WriteString(`请从以下维度审查每个段落：
+1. 【人设一致性】人物言行是否符合其性格和身份？
+2. 【剧情逻辑】是否有前后矛盾或不合理的转折？
+3. 【爽点节奏】是否过于拖沓？是否有期待感？
+4. 【文笔表达】描写是否生动？对话是否自然？
+
+请严格按以下 JSON 格式输出（不要使用 Markdown 代码块）：
+{
+  "overall_score": 85,
+  "paragraph_issues": [
+    {
+      "paragraph_id": "段落ID",
+      "type": "问题类型",
+      "severity": "严重程度",
+      "description": "问题描述",
+      "suggestion": "修改建议"
+    }
+  ],
+  "suggestions": ["整体建议1", "整体建议2"]
+}
+
+注意：只输出有问题的段落，没有问题的段落不要列出。`)
+
+	return prompt.String()
+}
+
+// parseParagraphReviewResult 解析段落审稿结果
+func (s *ReviewService) parseParagraphReviewResult(result string, paragraphs *model.ChapterParagraphs) *ParagraphReviewResult {
+	review := &ParagraphReviewResult{
+		OverallScore:    70,
+		ParagraphIssues: []ParagraphReviewIssue{},
+		Suggestions:     []string{},
+	}
+
+	// 构建段落 ID 到索引和文本的映射
+	paragraphMap := make(map[string]struct {
+		index int
+		text  string
+	})
+	for i, p := range paragraphs.Paragraphs {
+		paragraphMap[p.ID] = struct {
+			index int
+			text  string
+		}{index: i + 1, text: p.Text}
+	}
+
+	// 尝试解析 JSON
+	var data struct {
+		OverallScore    int `json:"overall_score"`
+		ParagraphIssues []struct {
+			ParagraphID string `json:"paragraph_id"`
+			Type        string `json:"type"`
+			Severity    string `json:"severity"`
+			Description string `json:"description"`
+			Suggestion  string `json:"suggestion"`
+		} `json:"paragraph_issues"`
+		Suggestions []string `json:"suggestions"`
+	}
+
+	if err := parseJSONResult(result, &data); err != nil {
+		return review
+	}
+
+	review.OverallScore = data.OverallScore
+	review.Suggestions = data.Suggestions
+
+	// 处理段落问题
+	for _, issue := range data.ParagraphIssues {
+		info, exists := paragraphMap[issue.ParagraphID]
+		if !exists {
+			// 尝试截断 ID 匹配
+			for pid, pinfo := range paragraphMap {
+				if len(pid) >= 8 && pid[:8] == issue.ParagraphID {
+					issue.ParagraphID = pid
+					info = pinfo
+					exists = true
+					break
+				}
+			}
+		}
+
+		if exists {
+			originalText := info.text
+			if len(originalText) > 100 {
+				originalText = originalText[:100] + "..."
+			}
+
+			review.ParagraphIssues = append(review.ParagraphIssues, ParagraphReviewIssue{
+				ParagraphID:    issue.ParagraphID,
+				ParagraphIndex: info.index,
+				Type:           issue.Type,
+				Severity:       issue.Severity,
+				Description:    issue.Description,
+				Suggestion:     issue.Suggestion,
+				OriginalText:   originalText,
+			})
+		}
+	}
+
+	return review
+}

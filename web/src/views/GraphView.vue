@@ -16,6 +16,7 @@
           <el-option label="人物" value="character" />
           <el-option label="物品" value="item" />
           <el-option label="地点" value="location" />
+          <el-option label="势力" value="faction" />
         </el-select>
       </div>
     </div>
@@ -40,6 +41,7 @@
             <el-descriptions-item label="人物数">{{ stats.characters }}</el-descriptions-item>
             <el-descriptions-item label="物品数">{{ stats.items }}</el-descriptions-item>
             <el-descriptions-item label="地点数">{{ stats.locations }}</el-descriptions-item>
+            <el-descriptions-item label="势力数">{{ stats.factions }}</el-descriptions-item>
             <el-descriptions-item label="关系数">{{ stats.links }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
@@ -102,6 +104,7 @@ const stats = ref({
   characters: 0,
   items: 0,
   locations: 0,
+  factions: 0,
   links: 0
 })
 
@@ -118,18 +121,20 @@ const goToSettings = () => {
 
 const getNodeTypeName = (type) => {
   const names = {
-    'character': '人物',
-    'item': '物品',
-    'location': '地点'
+    'character':  '人物',
+    'item':       '物品',
+    'location':   '地点',
+    'faction':    '势力'
   }
   return names[type] || type
 }
 
 const getNodeTypeColor = (type) => {
   const colors = {
-    'character': 'primary',
-    'item': 'warning',
-    'location': 'success'
+    'character':  'primary',
+    'item':       'warning',
+    'location':   'success',
+    'faction':    'danger'
   }
   return colors[type] || 'info'
 }
@@ -168,6 +173,7 @@ const updateStats = () => {
     characters: nodes.filter(n => n.category === 'character').length,
     items: nodes.filter(n => n.category === 'item').length,
     locations: nodes.filter(n => n.category === 'location').length,
+    factions: nodes.filter(n => n.category === 'faction').length,
     links: links.length
   }
 }
@@ -229,7 +235,7 @@ const renderGraph = () => {
       }
     },
     legend: [{
-      data: ['character', 'item', 'location'],
+      data: ['character', 'item', 'location', 'faction'],
       top: 40,
       formatter: (name) => getNodeTypeName(name)
     }],
@@ -249,12 +255,15 @@ const renderGraph = () => {
       links: links.map(l => ({
         source: l.source,
         target: l.target,
-        value: l.value
+        value: l.value,
+        lineStyle: l.lineStyle || { type: 'solid', color: 'source' },
+        symbol: l.symbol || 'none'
       })),
       categories: [
         { name: 'character', itemStyle: { color: '#5470c6' } },
         { name: 'item', itemStyle: { color: '#fac858' } },
-        { name: 'location', itemStyle: { color: '#91cc75' } }
+        { name: 'location', itemStyle: { color: '#91cc75' } },
+        { name: 'faction', itemStyle: { color: '#ee6666' } }
       ],
       roam: true,
       draggable: true,
@@ -267,9 +276,7 @@ const renderGraph = () => {
         repulsion: 200,
         edgeLength: 120
       },
-      emphasis: {
-        focus: 'adjacency'
-      },
+      // 不使用默认的 adjacency，改用自定义级联高亮
       lineStyle: {
         curveness: 0.2
       }
@@ -279,6 +286,116 @@ const renderGraph = () => {
   console.log('option:', JSON.stringify(option, null, 2))
   chartInstance.setOption(option, true)
   console.log('chart rendered')
+
+  // 自定义级联高亮函数 - 只追溯从属关系（有箭头的边）
+  const findUpstreamNodes = (nodeName) => {
+    // 获取所有需要高亮的节点（向上追溯）
+    const highlightedNodes = new Set([nodeName])
+    const highlightedLinks = new Set()
+
+    // BFS 向上追溯，只沿着从属关系的边（有箭头的边）
+    const queue = [nodeName]
+    while (queue.length > 0) {
+      const current = queue.shift()
+      // 只查找从属关系边（source -> target，有单向箭头）
+      links.forEach((link, idx) => {
+        // 判断是否为从属关系：symbol为['none', 'arrow']表示单向箭头
+        const isOwnership = Array.isArray(link.symbol) &&
+                           link.symbol[0] === 'none' &&
+                           link.symbol[1] === 'arrow'
+
+        if (isOwnership && link.source === current && !highlightedNodes.has(link.target)) {
+          highlightedNodes.add(link.target)
+          highlightedLinks.add(idx)
+          queue.push(link.target)
+        }
+        // 边的两端都在追溯链中，则高亮该边
+        if (highlightedNodes.has(link.source) && highlightedNodes.has(link.target)) {
+          highlightedLinks.add(idx)
+        }
+      })
+    }
+
+    return { nodes: highlightedNodes, links: highlightedLinks }
+  }
+
+  // 鼠标悬停事件 - 级联高亮
+  chartInstance.off('mouseover')
+  chartInstance.on('mouseover', (params) => {
+    if (params.dataType === 'node') {
+      const nodeName = params.data.name
+      const { nodes: highlightedNodes, links: highlightedLinks } = findUpstreamNodes(nodeName)
+
+      // 设置节点高亮状态 - 保留原有属性，只修改opacity
+      chartInstance.setOption({
+        series: [{
+          data: nodes.map((n) => {
+            const isHighlighted = highlightedNodes.has(n.name)
+            return {
+              name: n.name,
+              category: n.category,  // 保留类型
+              symbolSize: n.symbolSize || 30,  // 保留大小
+              value: n.value,  // 保留描述
+              itemStyle: {
+                color: n.itemStyle?.color || '#5470c6',
+                opacity: isHighlighted ? 1 : 0.2
+              },
+              label: {
+                show: true,
+                opacity: isHighlighted ? 1 : 0.2
+              }
+            }
+          }),
+          links: links.map((l, idx) => ({
+            source: l.source,
+            target: l.target,
+            value: l.value,
+            symbol: l.symbol,
+            lineStyle: {
+              ...l.lineStyle,
+              opacity: highlightedLinks.has(idx) ? 1 : 0.1
+            }
+          }))
+        }]
+      })
+    }
+  })
+
+  // 鼠标移出恢复
+  chartInstance.off('mouseout')
+  chartInstance.on('mouseout', (params) => {
+    if (params.dataType === 'node') {
+      // 恢复所有节点和边的透明度 - 保留原有属性
+      chartInstance.setOption({
+        series: [{
+          data: nodes.map(n => ({
+            name: n.name,
+            category: n.category,
+            symbolSize: n.symbolSize || 30,
+            value: n.value,
+            itemStyle: {
+              color: n.itemStyle?.color || '#5470c6',
+              opacity: 1
+            },
+            label: {
+              show: true,
+              opacity: 1
+            }
+          })),
+          links: links.map(l => ({
+            source: l.source,
+            target: l.target,
+            value: l.value,
+            symbol: l.symbol,
+            lineStyle: {
+              ...l.lineStyle,
+              opacity: 1
+            }
+          }))
+        }]
+      })
+    }
+  })
 
   // 点击事件
   chartInstance.off('click')

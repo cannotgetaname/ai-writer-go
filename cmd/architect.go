@@ -50,7 +50,7 @@ var architectGenerateCmd = &cobra.Command{
 			return
 		}
 
-		architect := service.NewArchitectService(llmClient)
+		architect := service.NewArchitectService(llmClient, jsonStore)
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -117,7 +117,7 @@ var architectFissionCmd = &cobra.Command{
 			return
 		}
 
-		architect := service.NewArchitectService(llmClient)
+		architect := service.NewArchitectService(llmClient, jsonStore)
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 

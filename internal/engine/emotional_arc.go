@@ -170,3 +170,33 @@ func (t *EmotionalArcTracker) GetEmotionSummary(bookName string, charName string
 
 	return summary.String()
 }
+
+// TrackAndSave 追踪情感并持久化到角色数据
+func (t *EmotionalArcTracker) TrackAndSave(ctx context.Context, bookName string, chapterID int) (map[string]model.EmotionPoint, error) {
+	emotions, err := t.TrackEmotion(ctx, bookName, chapterID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(emotions) == 0 {
+		return emotions, nil
+	}
+
+	// 持久化到角色数据
+	characters, err := t.store.LoadCharacters(bookName)
+	if err != nil {
+		return emotions, err
+	}
+
+	for _, char := range characters {
+		if point, ok := emotions[char.Name]; ok {
+			char.EmotionalArc = append(char.EmotionalArc, point)
+		}
+	}
+
+	if err := t.store.SaveCharacters(bookName, characters); err != nil {
+		return emotions, err
+	}
+
+	return emotions, nil
+}

@@ -134,11 +134,11 @@ func (s *ToolboxService) GenerateCharacter(ctx context.Context, req *CharacterRe
 	}
 
 	// 简单解析
-	char.Name = extractJSONValue(result, "name")
-	char.Bio = extractJSONValue(result, "bio")
-	char.Personality = extractJSONValue(result, "personality")
-	char.Goal = extractJSONValue(result, "goal")
-	char.Background = extractJSONValue(result, "background")
+	char.Name = extractJSONValueToolbox(result, "name")
+	char.Bio = extractJSONValueToolbox(result, "bio")
+	char.Personality = extractJSONValueToolbox(result, "personality")
+	char.Goal = extractJSONValueToolbox(result, "goal")
+	char.Background = extractJSONValueToolbox(result, "background")
 
 	return char, nil
 }
@@ -180,10 +180,10 @@ func (s *ToolboxService) GenerateConflict(ctx context.Context, req *ConflictRequ
 	}
 
 	conflict := &ConflictResult{
-		Title:       extractJSONValue(result, "title"),
-		Description: extractJSONValue(result, "description"),
-		Stakes:      extractJSONValue(result, "stakes"),
-		Resolution:  extractJSONValue(result, "resolution"),
+		Title:       extractJSONValueToolbox(result, "title"),
+		Description: extractJSONValueToolbox(result, "description"),
+		Stakes:      extractJSONValueToolbox(result, "stakes"),
+		Resolution:  extractJSONValueToolbox(result, "resolution"),
 	}
 
 	return conflict, nil
@@ -230,11 +230,11 @@ func (s *ToolboxService) GenerateScene(ctx context.Context, req *SceneRequest) (
 	}
 
 	scene := &SceneResult{
-		Title:       extractJSONValue(result, "title"),
-		Setting:     extractJSONValue(result, "setting"),
-		Atmosphere:  extractJSONValue(result, "atmosphere"),
-		Events:      extractJSONValue(result, "events"),
-		Description: extractJSONValue(result, "full_description"),
+		Title:       extractJSONValueToolbox(result, "title"),
+		Setting:     extractJSONValueToolbox(result, "setting"),
+		Atmosphere:  extractJSONValueToolbox(result, "atmosphere"),
+		Events:      extractJSONValueToolbox(result, "events"),
+		Description: extractJSONValueToolbox(result, "full_description"),
 	}
 
 	return scene, nil
@@ -282,10 +282,10 @@ func (s *ToolboxService) GenerateGoldfinger(ctx context.Context, req *Goldfinger
 
 	goldfinger := &GoldfingerResult{
 		Type:        req.Type,
-		Name:        extractJSONValue(result, "name"),
-		Description: extractJSONValue(result, "description"),
-		Limitations: extractJSONValue(result, "limitations"),
-		Origin:      extractJSONValue(result, "origin"),
+		Name:        extractJSONValueToolbox(result, "name"),
+		Description: extractJSONValueToolbox(result, "description"),
+		Limitations: extractJSONValueToolbox(result, "limitations"),
+		Origin:      extractJSONValueToolbox(result, "origin"),
 	}
 
 	return goldfinger, nil
@@ -350,15 +350,15 @@ type SynopsisRequest struct {
 	Type       string `json:"type"`       // 类型 (short/long)
 }
 
-// SynopsisResult 简介生成结果
-type SynopsisResult struct {
-	Synopsis    string `json:"synopsis"`
+// ToolboxSynopsisResult 简介生成结果
+type ToolboxSynopsisResult struct {
+	Synopsis    string   `json:"synopsis"`
 	Highlights  []string `json:"highlights"` // 卖点
-	Hook        string `json:"hook"`        // 开篇钩子
+	Hook        string   `json:"hook"`        // 开篇钩子
 }
 
 // GenerateSynopsis 生成简介
-func (s *ToolboxService) GenerateSynopsis(ctx context.Context, req *SynopsisRequest) (*SynopsisResult, error) {
+func (s *ToolboxService) GenerateSynopsis(ctx context.Context, req *SynopsisRequest) (*ToolboxSynopsisResult, error) {
 	length := "200字以内"
 	if req.Type == "long" {
 		length = "500字左右"
@@ -387,9 +387,9 @@ func (s *ToolboxService) GenerateSynopsis(ctx context.Context, req *SynopsisRequ
 		return nil, err
 	}
 
-	synopsis := &SynopsisResult{
-		Synopsis:   extractJSONValue(result, "synopsis"),
-		Hook:       extractJSONValue(result, "hook"),
+	synopsis := &ToolboxSynopsisResult{
+		Synopsis:   extractJSONValueToolbox(result, "synopsis"),
+		Hook:       extractJSONValueToolbox(result, "hook"),
 		Highlights: parseHighlights(extractJSONArray(result, "highlights")),
 	}
 
@@ -447,10 +447,10 @@ func (s *ToolboxService) GenerateTwist(ctx context.Context, req *TwistRequest) (
 	}
 
 	twist := &TwistResult{
-		Title:       extractJSONValue(result, "title"),
-		Description: extractJSONValue(result, "description"),
-		Impact:      extractJSONValue(result, "impact"),
-		Setup:       extractJSONValue(result, "setup"),
+		Title:       extractJSONValueToolbox(result, "title"),
+		Description: extractJSONValueToolbox(result, "description"),
+		Impact:      extractJSONValueToolbox(result, "impact"),
+		Setup:       extractJSONValueToolbox(result, "setup"),
 		Clues:       parseClues(extractJSONArray(result, "clues")),
 	}
 
@@ -505,9 +505,9 @@ func parseTitles(result string) []TitleItem {
 	lines := strings.Split(result, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, `"title"`) {
-			title := extractJSONValue(line, "title")
-			meaning := extractJSONValue(line, "meaning")
-			attraction := extractJSONValue(line, "attraction")
+			title := extractJSONValueToolbox(line, "title")
+			meaning := extractJSONValueToolbox(line, "meaning")
+			attraction := extractJSONValueToolbox(line, "attraction")
 			if title != "" {
 				titles = append(titles, TitleItem{
 					Title:      title,
@@ -589,8 +589,8 @@ func parseNames(result string) []NameItem {
 	lines := strings.Split(result, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, `"name"`) {
-			name := extractJSONValue(line, "name")
-			meaning := extractJSONValue(line, "meaning")
+			name := extractJSONValueToolbox(line, "name")
+			meaning := extractJSONValueToolbox(line, "meaning")
 			if name != "" {
 				names = append(names, NameItem{
 					Name:    name,
@@ -612,7 +612,7 @@ func parseNames(result string) []NameItem {
 }
 
 // extractJSONValue 从 JSON 字符串中提取值
-func extractJSONValue(jsonStr, key string) string {
+func extractJSONValueToolbox(jsonStr, key string) string {
 	searchKey := `"` + key + `":`
 	startIdx := strings.Index(jsonStr, searchKey)
 	if startIdx == -1 {

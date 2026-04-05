@@ -7,6 +7,10 @@
       </el-button>
       <h2>{{ bookId }} - AI 写作</h2>
       <div class="header-actions">
+        <el-button @click="showParagraphDialog">
+          <el-icon><List /></el-icon>
+          段落管理
+        </el-button>
         <el-button type="primary" @click="showGenerateDialog">
           <el-icon><MagicStick /></el-icon>
           AI 生成
@@ -14,6 +18,10 @@
         <el-button type="success" @click="showContinueDialog">
           <el-icon><Plus /></el-icon>
           续写
+        </el-button>
+        <el-button type="warning" @click="review" :loading="reviewing">
+          <el-icon><DocumentChecked /></el-icon>
+          审稿
         </el-button>
         <el-button @click="saveContent" :loading="saving">
           <el-icon><Save /></el-icon>
@@ -92,18 +100,51 @@
         <!-- 审稿结果 -->
         <el-card v-if="reviewResult" class="review-panel">
           <template #header>
-            <span>审稿结果</span>
+            <div class="card-header">
+              <span>审稿结果</span>
+              <el-button size="small" @click="review" :loading="reviewing">重新审稿</el-button>
+            </div>
           </template>
           <div class="review-score">
-            综合评分: <el-rate :model-value="reviewResult.overall_score / 20" disabled />
+            综合评分:
+            <el-progress :percentage="reviewResult.overall_score" :color="getScoreColor(reviewResult.overall_score)" />
           </div>
-          <div v-for="issue in reviewResult.issues" :key="issue.type" class="review-issue">
-            <el-tag :type="issue.severity === '严重' ? 'danger' : 'warning'" size="small">
-              {{ issue.type }}
-            </el-tag>
-            <p>{{ issue.description }}</p>
+
+          <div v-if="reviewResult.paragraph_issues && reviewResult.paragraph_issues.length > 0" class="review-issues">
+            <el-divider content-position="left">段落问题</el-divider>
+            <el-collapse>
+              <el-collapse-item
+                v-for="(issue, idx) in reviewResult.paragraph_issues"
+                :key="idx"
+                :name="idx"
+              >
+                <template #title>
+                  <div class="issue-title">
+                    <el-tag type="info" size="small">段落{{ issue.paragraph_index }}</el-tag>
+                    <el-tag :type="getSeverityType(issue.severity)" size="small">{{ issue.severity }}</el-tag>
+                    <el-tag size="small">{{ issue.type }}</el-tag>
+                  </div>
+                </template>
+                <div class="issue-detail">
+                  <p class="issue-desc">{{ issue.description }}</p>
+                  <p class="issue-suggestion"><strong>建议:</strong> {{ issue.suggestion }}</p>
+                  <div class="issue-original" v-if="issue.original_text">
+                    <el-text type="info" size="small">原文预览: {{ issue.original_text }}</el-text>
+                  </div>
+                  <el-button type="primary" size="small" @click="showRewriteDialog(issue)">
+                    重绘此段落
+                  </el-button>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
           </div>
-          <el-button size="small" @click="review">重新审稿</el-button>
+
+          <div v-if="reviewResult.suggestions && reviewResult.suggestions.length > 0" class="review-suggestions">
+            <el-divider content-position="left">整体建议</el-divider>
+            <ul>
+              <li v-for="(s, idx) in reviewResult.suggestions" :key="idx">{{ s }}</li>
+            </ul>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -162,6 +203,98 @@
         <el-button type="primary" @click="createChapter">创建</el-button>
       </template>
     </el-dialog>
+
+    <!-- 段落重绘对话框 -->
+    <el-dialog v-model="rewriteDialogVisible" title="段落重绘" width="600px">
+      <el-form label-width="80px">
+        <el-form-item label="段落序号">
+          <el-tag>段落 {{ rewriteParams.paragraph_index }}</el-tag>
+        </el-form-item>
+        <el-form-item label="原文预览">
+          <el-input :model-value="rewriteParams.original_text" type="textarea" :rows="3" readonly />
+        </el-form-item>
+        <el-form-item label="问题类型">
+          <el-tag>{{ rewriteParams.issue_type }}</el-tag>
+        </el-form-item>
+        <el-form-item label="问题描述">
+          <el-text>{{ rewriteParams.issue_description }}</el-text>
+        </el-form-item>
+        <el-form-item label="重绘指令">
+          <el-input v-model="rewriteParams.instruction" type="textarea" :rows="3" placeholder="可编辑修改建议，或输入自定义重绘指令" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rewriteDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="rewriteParagraph" :loading="rewriting">
+          开始重绘
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 重绘结果对话框 -->
+    <el-dialog v-model="rewriteResultVisible" title="重绘结果" width="700px">
+      <el-row :gutter="20">
+        <el-col :span="12">
+          <h4>原文</h4>
+          <div class="rewrite-content">{{ rewriteResult.original }}</div>
+        </el-col>
+        <el-col :span="12">
+          <h4>新文</h4>
+          <div class="rewrite-content">{{ rewriteResult.new }}</div>
+        </el-col>
+      </el-row>
+      <template #footer>
+        <el-button @click="rewriteResultVisible = false">放弃</el-button>
+        <el-button type="primary" @click="applyRewrite">应用修改</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 段落管理对话框 -->
+    <el-dialog v-model="paragraphDialogVisible" title="段落管理" width="800px">
+      <el-alert type="info" :closable="false" style="margin-bottom: 15px;">
+        拖拽段落可调整顺序，点击操作按钮可删除或编辑段落
+      </el-alert>
+      <el-table :data="paragraphs" stripe>
+        <el-table-column type="index" label="序号" width="60" />
+        <el-table-column label="内容预览">
+          <template #default="{ row }">
+            <el-text line-clamp="2">{{ row.text }}</el-text>
+          </template>
+        </el-table-column>
+        <el-table-column prop="word_count" label="字数" width="80" />
+        <el-table-column label="操作" width="180">
+          <template #default="{ row, $index }">
+            <el-button-group>
+              <el-button size="small" :disabled="$index === 0" @click="moveParagraph($index, -1)">
+                <el-icon><ArrowUp /></el-icon>
+              </el-button>
+              <el-button size="small" :disabled="$index === paragraphs.length - 1" @click="moveParagraph($index, 1)">
+                <el-icon><ArrowDown /></el-icon>
+              </el-button>
+              <el-button size="small" type="primary" @click="editParagraph(row, $index)">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+              <el-button size="small" type="danger" @click="deleteParagraph($index)">
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </el-button-group>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="paragraphDialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="saveParagraphs">保存修改</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑段落对话框 -->
+    <el-dialog v-model="editParagraphVisible" title="编辑段落" width="600px">
+      <el-input v-model="editParagraphContent" type="textarea" :rows="8" />
+      <template #footer>
+        <el-button @click="editParagraphVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveEditParagraph">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -201,6 +334,31 @@ const continueParams = ref({
 const newChapterDialogVisible = ref(false)
 const newChapter = ref({ title: '', outline: '' })
 
+// 段落重绘相关
+const rewriteDialogVisible = ref(false)
+const rewriting = ref(false)
+const rewriteParams = ref({
+  paragraph_id: '',
+  paragraph_index: 0,
+  original_text: '',
+  issue_type: '',
+  issue_description: '',
+  instruction: ''
+})
+const rewriteResultVisible = ref(false)
+const rewriteResult = ref({
+  original: '',
+  new: '',
+  paragraph_id: ''
+})
+
+// 段落管理
+const paragraphDialogVisible = ref(false)
+const paragraphs = ref([])
+const editParagraphVisible = ref(false)
+const editParagraphContent = ref('')
+const editParagraphIndex = ref(-1)
+
 const goBack = () => {
   router.push(`/books/${bookId.value}`)
 }
@@ -227,6 +385,17 @@ const selectChapter = async (chapterId) => {
       updateWordCount()
     } catch (error) {
       content.value = ''
+    }
+    // 加载已保存的审稿结果
+    try {
+      const reviewRes = await aiApi.getReview(bookId.value, ch.id)
+      if (reviewRes.data?.paragraph_issues) {
+        reviewResult.value = reviewRes.data
+      } else {
+        reviewResult.value = null
+      }
+    } catch (error) {
+      reviewResult.value = null
     }
   }
 }
@@ -315,10 +484,13 @@ const continueWrite = async () => {
 }
 
 const review = async () => {
-  if (!currentChapter.value) return
+  if (!currentChapter.value) {
+    ElMessage.warning('请先选择章节')
+    return
+  }
   reviewing.value = true
   try {
-    const res = await aiApi.review({
+    const res = await aiApi.reviewByParagraph({
       book_name: bookId.value,
       chapter_id: currentChapter.value.id
     })
@@ -332,6 +504,78 @@ const review = async () => {
     ElMessage.error('审稿失败: ' + (error.response?.data?.error || error.message))
   }
   reviewing.value = false
+}
+
+const getScoreColor = (score) => {
+  if (score >= 80) return '#67c23a'
+  if (score >= 60) return '#e6a23c'
+  return '#f56c6c'
+}
+
+const getSeverityType = (severity) => {
+  if (severity === '严重' || severity === '高') return 'danger'
+  if (severity === '中等' || severity === '中') return 'warning'
+  return 'info'
+}
+
+const showRewriteDialog = (issue) => {
+  rewriteParams.value = {
+    paragraph_id: issue.paragraph_id,
+    paragraph_index: issue.paragraph_index,
+    original_text: issue.original_text || '',
+    issue_type: issue.type,
+    issue_description: issue.description,
+    instruction: issue.suggestion || ''
+  }
+  rewriteDialogVisible.value = true
+}
+
+const rewriteParagraph = async () => {
+  if (!rewriteParams.value.instruction) {
+    ElMessage.warning('请输入重绘指令')
+    return
+  }
+  rewriting.value = true
+  try {
+    const res = await aiApi.rewriteParagraph({
+      book_name: bookId.value,
+      chapter_id: currentChapter.value.id,
+      paragraph_id: rewriteParams.value.paragraph_id,
+      instruction: rewriteParams.value.instruction
+    })
+    if (res.data?.content) {
+      rewriteResult.value = {
+        original: rewriteParams.value.original_text,
+        new: res.data.content,
+        paragraph_id: rewriteParams.value.paragraph_id
+      }
+      rewriteDialogVisible.value = false
+      rewriteResultVisible.value = true
+    } else {
+      ElMessage.info(res.data?.message || '重绘完成')
+    }
+  } catch (error) {
+    ElMessage.error('重绘失败: ' + (error.response?.data?.error || error.message))
+  }
+  rewriting.value = false
+}
+
+const applyRewrite = async () => {
+  try {
+    // 更新单个段落
+    await chapterApi.updateParagraph(
+      bookId.value,
+      currentChapter.value.id,
+      rewriteResult.value.paragraph_id,
+      rewriteResult.value.new
+    )
+    ElMessage.success('已应用修改')
+    rewriteResultVisible.value = false
+    // 重新加载内容
+    selectChapter(currentChapter.value.id.toString())
+  } catch (error) {
+    ElMessage.error('应用失败: ' + (error.response?.data?.error || error.message))
+  }
 }
 
 const showNewChapterDialog = () => {
@@ -348,6 +592,57 @@ const createChapter = async () => {
   } catch (error) {
     ElMessage.error('创建失败')
   }
+}
+
+// 段落管理功能
+const showParagraphDialog = () => {
+  parseParagraphs()
+  paragraphDialogVisible.value = true
+}
+
+const parseParagraphs = () => {
+  // 将内容按空行分割成段落
+  const parts = content.value.split(/\n\n+/).filter(p => p.trim())
+  paragraphs.value = parts.map((text, index) => ({
+    id: `para_${index}`,
+    text: text.trim(),
+    word_count: (text.match(/[\u4e00-\u9fa5]/g) || []).length
+  }))
+}
+
+const moveParagraph = (index, direction) => {
+  const newIndex = index + direction
+  if (newIndex < 0 || newIndex >= paragraphs.value.length) return
+  const temp = paragraphs.value[index]
+  paragraphs.value[index] = paragraphs.value[newIndex]
+  paragraphs.value[newIndex] = temp
+}
+
+const editParagraph = (row, index) => {
+  editParagraphContent.value = row.text
+  editParagraphIndex.value = index
+  editParagraphVisible.value = true
+}
+
+const saveEditParagraph = () => {
+  if (editParagraphIndex.value >= 0) {
+    paragraphs.value[editParagraphIndex.value].text = editParagraphContent.value
+    paragraphs.value[editParagraphIndex.value].word_count = (editParagraphContent.value.match(/[\u4e00-\u9fa5]/g) || []).length
+  }
+  editParagraphVisible.value = false
+}
+
+const deleteParagraph = (index) => {
+  paragraphs.value.splice(index, 1)
+}
+
+const saveParagraphs = async () => {
+  // 将段落合并回内容
+  content.value = paragraphs.value.map(p => p.text).join('\n\n')
+  updateWordCount()
+  await saveContent()
+  paragraphDialogVisible.value = false
+  ElMessage.success('段落已更新')
 }
 
 const loadForeshadows = async () => {
@@ -409,18 +704,61 @@ onMounted(() => {
 }
 
 .review-score {
-  margin-bottom: 10px;
+  margin-bottom: 15px;
 }
 
-.review-issue {
-  margin-bottom: 10px;
+.review-issues {
+  margin-top: 10px;
+}
+
+.issue-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.issue-detail {
   padding: 10px;
   background: #f5f7fa;
   border-radius: 4px;
 }
 
-.review-issue p {
-  margin: 5px 0 0 0;
-  color: #666;
+.issue-desc {
+  margin: 0 0 10px 0;
+  color: #303133;
+}
+
+.issue-suggestion {
+  margin: 0 0 10px 0;
+  color: #606266;
+}
+
+.issue-original {
+  margin-bottom: 10px;
+}
+
+.review-suggestions {
+  margin-top: 10px;
+}
+
+.review-suggestions ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.review-suggestions li {
+  margin: 5px 0;
+  color: #606266;
+}
+
+.rewrite-content {
+  background: #f5f7fa;
+  padding: 15px;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
 }
 </style>

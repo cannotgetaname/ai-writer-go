@@ -36,6 +36,12 @@ type Character struct {
 	Bio       string `json:"bio"`    // 简介
 	Avatar    string `json:"avatar,omitempty"`
 
+	// 势力与身份
+	Faction     string `json:"faction,omitempty"`     // 所属势力/组织
+	Sect        string `json:"sect,omitempty"`        // 宗门/门派
+	Position    string `json:"position,omitempty"`    // 职位/身份
+	Cultivation string `json:"cultivation,omitempty"` // 修为境界
+
 	// Dramatica 扩展字段
 	DramaticaRole  DramaticaRole `json:"dramatica_role"`           // Dramatica 职能
 	ExternalGoal   string        `json:"external_goal,omitempty"`  // 外部目标（可见）
@@ -52,6 +58,20 @@ type Character struct {
 
 	// 状态历史
 	StatusHistory []StatusChange `json:"status_history,omitempty"`
+
+	// 章节追踪
+	AppearChapters []int `json:"appear_chapters,omitempty"` // 出场章节列表
+
+	// 势力变更历史
+	FactionHistory []FactionChange `json:"faction_history,omitempty"`
+}
+
+// FactionChange 势力变更记录
+type FactionChange struct {
+	ChapterID  int    `json:"chapter_id"`
+	OldFaction string `json:"old_faction"`
+	NewFaction string `json:"new_faction"`
+	Reason     string `json:"reason"`
 }
 
 // Relation 人物关系

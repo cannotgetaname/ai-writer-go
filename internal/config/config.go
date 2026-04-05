@@ -10,20 +10,22 @@ import (
 
 // Config 应用配置
 type Config struct {
-	Server       ServerConfig       `mapstructure:"server"`
-	LLM          LLMConfig          `mapstructure:"llm"`
-	Storage      StorageConfig      `mapstructure:"storage"`
-	Prompts      PromptsConfig      `mapstructure:"prompts"`
-	Models       ModelsConfig       `mapstructure:"models"`
-	Pricing      PricingConfig      `mapstructure:"pricing"`
-	VectorStore  VectorStoreConfig  `mapstructure:"vector_store"`
-	LastOpenBook string             `mapstructure:"last_open_book"`
+	Server      ServerConfig       `mapstructure:"server"`
+	LLM         LLMConfig          `mapstructure:"llm"`
+	Embedding   EmbeddingConfig    `mapstructure:"embedding"`
+	Storage     StorageConfig      `mapstructure:"storage"`
+	Prompts     PromptsConfig      `mapstructure:"prompts"`
+	Models      ModelsConfig       `mapstructure:"models"`
+	Pricing     PricingConfig      `mapstructure:"pricing"`
+	VectorStore VectorStoreConfig  `mapstructure:"vector_store"`
+	LastOpenBook string            `mapstructure:"last_open_book"`
 }
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
 	Port    string `mapstructure:"port"`
 	DataDir string `mapstructure:"data_dir"`
+	AuthKey string `mapstructure:"auth_key"` // API 认证密钥（可选）
 }
 
 // LLMConfig LLM 配置
@@ -47,6 +49,14 @@ type StorageConfig struct {
 type VectorStoreConfig struct {
 	ChunkSize int `mapstructure:"chunk_size"`
 	Overlap   int `mapstructure:"overlap"`
+}
+
+// EmbeddingConfig 向量嵌入配置
+type EmbeddingConfig struct {
+	Provider string `mapstructure:"provider"` // ollama/openai
+	Model    string `mapstructure:"model"`    // embeddinggemma:latest / text-embedding-3-small
+	BaseURL  string `mapstructure:"base_url"` // http://localhost:11434
+	APIKey   string `mapstructure:"api_key"`  // OpenAI API key (if needed)
 }
 
 // PromptsConfig 提示词配置
@@ -113,6 +123,11 @@ var defaultConfig = Config{
 			"timekeeper": 0.1,
 			"summary":   0.5,
 		},
+	},
+	Embedding: EmbeddingConfig{
+		Provider: "ollama",
+		Model:    "embeddinggemma:latest",
+		BaseURL:  "http://localhost:11434",
 	},
 	Storage: StorageConfig{
 		ProjectsDir: "data/projects",

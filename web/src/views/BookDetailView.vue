@@ -44,6 +44,10 @@
           <el-icon><Refresh /></el-icon>
           状态同步
         </el-button>
+        <el-button @click="goToAnalysis">
+          <el-icon><DataAnalysis /></el-icon>
+          分析
+        </el-button>
         <el-button type="primary" @click="goToArchitect">
           <el-icon><Grid /></el-icon>
           架构师
@@ -175,6 +179,10 @@ const goToArchitect = () => {
 
 const goToSync = () => {
   router.push(`/books/${bookId.value}/sync`)
+}
+
+const goToAnalysis = () => {
+  router.push(`/books/${bookId.value}/analysis`)
 }
 
 const exportBook = (format) => {

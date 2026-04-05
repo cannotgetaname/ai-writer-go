@@ -8,13 +8,35 @@ const api = axios.create({
   }
 })
 
+// 请求拦截器 - 添加认证头
+api.interceptors.request.use(config => {
+  const authKey = localStorage.getItem('authKey')
+  if (authKey) {
+    config.headers['X-Auth-Key'] = authKey
+  }
+  return config
+}, error => {
+  return Promise.reject(error)
+})
+
+// 响应拦截器 - 处理认证错误
+api.interceptors.response.use(response => response, error => {
+  if (error.response && error.response.status === 401) {
+    // 清除本地存储的 authKey
+    localStorage.removeItem('authKey')
+    console.error('认证失败，请检查 API Key 配置')
+  }
+  return Promise.reject(error)
+})
+
 // 书籍管理
 export const bookApi = {
   list: () => api.get('/books'),
   get: (id) => api.get(`/books/${id}`),
   create: (data) => api.post('/books', data),
   update: (id, data) => api.put(`/books/${id}`, data),
-  delete: (id) => api.delete(`/books/${id}`)
+  delete: (id) => api.delete(`/books/${id}`),
+  init: (data) => api.post('/books/init', data)
 }
 
 // 章节管理
@@ -25,7 +47,8 @@ export const chapterApi = {
   update: (bookId, chapterId, data) => api.put(`/books/${bookId}/chapters/${chapterId}`, data),
   delete: (bookId, chapterId) => api.delete(`/books/${bookId}/chapters/${chapterId}`),
   getContent: (bookId, chapterId) => api.get(`/books/${bookId}/chapters/${chapterId}/content`),
-  saveContent: (bookId, chapterId, content) => api.put(`/books/${bookId}/chapters/${chapterId}/content`, { content })
+  saveContent: (bookId, chapterId, content) => api.put(`/books/${bookId}/chapters/${chapterId}/content`, { content }),
+  updateParagraph: (bookId, chapterId, paragraphId, text) => api.put(`/books/${bookId}/chapters/${chapterId}/paragraph`, { paragraph_id: paragraphId, text })
 }
 
 // 设定管理
@@ -38,9 +61,11 @@ export const settingsApi = {
   deleteCharacter: (bookId, charId) => api.delete(`/books/${bookId}/settings/characters/${charId}`),
   getItems: (bookId) => api.get(`/books/${bookId}/settings/items`),
   createItem: (bookId, data) => api.post(`/books/${bookId}/settings/items`, data),
+  updateItem: (bookId, itemId, data) => api.put(`/books/${bookId}/settings/items/${itemId}`, data),
   deleteItem: (bookId, itemId) => api.delete(`/books/${bookId}/settings/items/${itemId}`),
   getLocations: (bookId) => api.get(`/books/${bookId}/settings/locations`),
   createLocation: (bookId, data) => api.post(`/books/${bookId}/settings/locations`, data),
+  updateLocation: (bookId, locId, data) => api.put(`/books/${bookId}/settings/locations/${locId}`, data),
   deleteLocation: (bookId, locId) => api.delete(`/books/${bookId}/settings/locations/${locId}`)
 }
 
@@ -53,8 +78,11 @@ export const aiApi = {
     return eventSource
   },
   review: (data) => api.post('/ai/review', data),
+  reviewByParagraph: (data) => api.post('/ai/review-paragraph', data),
+  getReview: (bookId, chapterId) => api.get(`/ai/review?book_name=${bookId}&chapter_id=${chapterId}`),
   audit: (data) => api.post('/ai/audit', data),
   rewrite: (data) => api.post('/ai/rewrite', data),
+  rewriteParagraph: (data) => api.post('/ai/rewrite-paragraph', data),
   continue: (data) => api.post('/ai/continue', data)
 }
 
@@ -110,6 +138,15 @@ export const toolboxApi = {
 
 // 架构师
 export const architectApi = {
+  // 分形写作流程
+  generateSynopsis: (data) => api.post('/architect/synopsis', data),
+  generateWorldView: (data) => api.post('/architect/worldview', data),
+  generateVolumes: (data) => api.post('/architect/volumes', data),
+  expandVolume: (data) => api.post('/architect/volume/expand', data),
+  expandChapter: (data) => api.post('/architect/chapter/expand', data),
+  saveOutline: (data) => api.post('/architect/save', data),
+  saveWorldView: (data) => api.post('/architect/save-worldview', data),
+  // 兼容旧接口
   generate: (data) => api.post('/architect/generate', data),
   fission: (data) => api.post('/architect/fission', data),
   strategies: () => api.get('/architect/strategies')
@@ -161,6 +198,33 @@ export const systemApi = {
   getBilling: () => api.get('/system/billing'),
   getGoals: () => api.get('/system/goals'),
   updateGoals: (data) => api.put('/system/goals', data)
+}
+
+// 向量存储
+export const vectorApi = {
+  indexBook: (bookName) => api.post('/vector/index', { book_name: bookName }),
+  indexChapter: (bookName, chapterId) => api.post('/vector/index/chapter', { book_name: bookName, chapter_id: chapterId }),
+  search: (bookName, query, topK = 5) => api.post('/vector/search', { book_name: bookName, query, top_k: topK }),
+  getStatus: (bookName) => api.get(`/vector/status?book_name=${bookName}`),
+  deleteBook: (bookName) => api.delete(`/vector/index/${bookName}`)
+}
+
+// 一致性检查
+export const consistencyApi = {
+  check: (bookId, from, to) => api.post(`/books/${bookId}/check/consistency?from=${from}&to=${to}`),
+  checkChapter: (bookId, chapterId) => api.post(`/books/${bookId}/check/consistency?chapter=${chapterId}`)
+}
+
+// 情感弧线
+export const emotionApi = {
+  track: (bookId, chapterId) => api.post(`/books/${bookId}/emotion/track?chapter=${chapterId}`),
+  getArc: (bookId, charName) => api.get(`/books/${bookId}/emotion/${charName}`)
+}
+
+// 信息边界
+export const infoBoundaryApi = {
+  checkLeak: (bookId, chapterId) => api.post(`/books/${bookId}/info-boundary/check?chapter=${chapterId}`),
+  extractInfo: (bookId, chapterId) => api.post(`/books/${bookId}/info-boundary/extract?chapter=${chapterId}`)
 }
 
 export default api
