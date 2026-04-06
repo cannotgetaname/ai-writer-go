@@ -588,3 +588,109 @@ func (s *GraphService) BuildCausalGraph(bookName string) (*GraphData, error) {
 
 	return data, nil
 }
+
+// BuildForeshadowGraph 构建伏笔追踪图谱
+func (s *GraphService) BuildForeshadowGraph(bookName string) (*GraphData, error) {
+	data := &GraphData{
+		Nodes: []GraphNode{},
+		Links: []GraphLink{},
+		Categories: []Category{
+			{Name: "foreshadow"},
+			{Name: "chapter"},
+		},
+	}
+
+	// 状态颜色映射
+	statusColorMap := map[string]string{
+		"active":    "#5470c6", // 蓝色 - 埋设中
+		"resolved":  "#91cc75", // 绿色 - 已回收
+		"expired":   "#fac858", // 橙色 - 过期预警
+		"abandoned": "#aaaaaa", // 灰色 - 已放弃
+	}
+
+	// 重要程度大小映射
+	importanceSizeMap := map[string]int{
+		"high":   40,
+		"medium": 30,
+		"low":    25,
+	}
+
+	nodeNames := make(map[string]bool)
+
+	addNode := func(name, category string, symbolSize int, value string, status string) {
+		if nodeNames[name] {
+			return
+		}
+		nodeNames[name] = true
+		node := GraphNode{
+			Name:       name,
+			Category:   category,
+			SymbolSize: symbolSize,
+			Value:      truncateStr(value, 50),
+		}
+		if category == "foreshadow" {
+			node.ItemStyle.Color = statusColorMap[status]
+		} else {
+			node.ItemStyle.Color = "#91cc75"
+		}
+		node.Label.Show = true
+		node.Label.Position = "right"
+		data.Nodes = append(data.Nodes, node)
+	}
+
+	addLink := func(source, target, relation string, isDashed bool, color string) {
+		if source == "" || target == "" || source == target {
+			return
+		}
+		link := GraphLink{
+			Source: source,
+			Target: target,
+			Value:  relation,
+		}
+		if isDashed {
+			link.LineStyle.Type = "dashed"
+		} else {
+			link.LineStyle.Type = "solid"
+		}
+		link.LineStyle.Color = color
+		link.LineStyle.Curveness = 0.2
+		data.Links = append(data.Links, link)
+	}
+
+	// 加载伏笔数据
+	foreshadows, err := s.store.LoadForeshadows(bookName)
+	if err != nil {
+		return data, nil
+	}
+
+	for _, fs := range foreshadows {
+		// 伏笔节点
+		fsLabel := truncateStr(fs.Content, 25)
+		size := importanceSizeMap[string(fs.Importance)]
+		if size == 0 {
+			size = 30
+		}
+		addNode(fsLabel, "foreshadow", size, fs.Content, string(fs.Status))
+
+		// 埋设章节节点
+		sourceChLabel := fmt.Sprintf("第%d章", fs.SourceChapter)
+		addNode(sourceChLabel, "chapter", 25, "", "")
+		addLink(fsLabel, sourceChLabel, "埋设", false, "#5470c6")
+
+		// 回收章节（已回收时）
+		if fs.Status == model.ForeshadowResolved && fs.ResolvedChapter > 0 {
+			resolvedChLabel := fmt.Sprintf("第%d章", fs.ResolvedChapter)
+			addNode(resolvedChLabel, "chapter", 25, "", "")
+			addLink(fsLabel, resolvedChLabel, "回收", false, "#91cc75")
+		}
+
+		// 预期回收章节（埋设中时，虚线显示）
+		if fs.Status == model.ForeshadowActive && fs.TargetChapter > 0 {
+			targetChLabel := fmt.Sprintf("第%d章(预期)", fs.TargetChapter)
+			addNode(targetChLabel, "chapter", 20, "", "")
+			addLink(fsLabel, targetChLabel, "预期", true, "#fac858")
+		}
+	}
+
+	return data, nil
+}
