@@ -3,6 +3,7 @@ package service
 import (
 	"ai-writer/internal/model"
 	"ai-writer/internal/store"
+	"fmt"
 )
 
 // GraphService 知识图谱服务
@@ -492,4 +493,98 @@ func (s *GraphService) FindPath(bookName string, start string, end string) ([]st
 	}
 
 	return nil, nil
+}
+
+// BuildCausalGraph 构建因果链图谱
+func (s *GraphService) BuildCausalGraph(bookName string) (*GraphData, error) {
+	data := &GraphData{
+		Nodes: []GraphNode{},
+		Links: []GraphLink{},
+		Categories: []Category{
+			{Name: "event"},
+			{Name: "chapter"},
+		},
+	}
+
+	colorMap := map[string]string{
+		"event":   "#5470c6", // 蓝色
+		"chapter": "#91cc75", // 绿色
+	}
+
+	nodeNames := make(map[string]bool)
+
+	addNode := func(name, category string, symbolSize int, value string, chapterID int) {
+		if nodeNames[name] {
+			return
+		}
+		nodeNames[name] = true
+		node := GraphNode{
+			Name:       name,
+			Category:   category,
+			SymbolSize: symbolSize,
+			Value:      truncateStr(value, 30),
+		}
+		node.ItemStyle.Color = colorMap[category]
+		node.Label.Show = true
+		node.Label.Position = "right"
+		data.Nodes = append(data.Nodes, node)
+	}
+
+	addLink := func(source, target, linkType string) {
+		if source == "" || target == "" || source == target {
+			return
+		}
+
+		link := GraphLink{
+			Source: source,
+			Target: target,
+			Value:  linkType,
+			Symbol: []string{"none", "arrow"},
+		}
+
+		// 根据类型设置线条样式
+		switch linkType {
+		case "leads_to":
+			link.LineStyle.Type = "solid"
+			link.LineStyle.Color = "#5470c6"
+		case "enables":
+			link.LineStyle.Type = "dashed"
+			link.LineStyle.Color = "#91cc75"
+		case "blocks":
+			link.LineStyle.Type = "dashed"
+			link.LineStyle.Color = "#ee6666"
+		default:
+			link.LineStyle.Type = "solid"
+			link.LineStyle.Color = "#5470c6"
+		}
+		link.LineStyle.Curveness = 0.2
+
+		data.Links = append(data.Links, link)
+	}
+
+	// 加载因果链数据
+	events, err := s.store.LoadCausalChains(bookName)
+	if err != nil {
+		// 返回空图谱
+		return data, nil
+	}
+
+	// 构建事件节点和因果链接
+	for _, event := range events {
+		// 事件节点
+		eventLabel := fmt.Sprintf("第%d章: %s", event.ChapterID, truncateStr(event.Event, 20))
+		addNode(eventLabel, "event", 35, event.Event, event.ChapterID)
+
+		// 添加章节节点（用于定位）
+		chapterLabel := fmt.Sprintf("第%d章", event.ChapterID)
+		addNode(chapterLabel, "chapter", 25, "", event.ChapterID)
+
+		// 事件 → 章节
+		addLink(eventLabel, chapterLabel, "归属")
+	}
+
+	// TODO: 构建因果链接（事件之间）- 需要store支持加载Links
+	// 当前store只有LoadCausalChains返回events，links存储待实现
+
+	return data, nil
 }
