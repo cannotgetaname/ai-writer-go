@@ -32,6 +32,10 @@ type CausalEvent struct {
 	// 状态
 	Status CausalStatus `json:"status"`
 
+	// AI检测相关
+	AutoDetected  bool   `json:"auto_detected"`   // 是否AI检测
+	SourceContext string `json:"source_context"`  // 原文片段
+
 	CreatedAt time.Time `json:"created_at"`
 }
 
