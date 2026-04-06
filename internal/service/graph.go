@@ -819,3 +819,78 @@ func (s *GraphService) BuildThreadGraph(bookName string) (*GraphData, error) {
 
 	return data, nil
 }
+
+// BuildEmotionGraph 构建情感图谱（折线图）
+func (s *GraphService) BuildEmotionGraph(bookName string) (*EmotionGraphData, error) {
+	data := &EmotionGraphData{
+		Type:      "emotion",
+		ChartType: "line",
+		Data:      []EmotionArcData{},
+		Metadata: EmotionMetadata{
+			Characters:   []string{},
+			ChapterRange: []int{},
+			EmotionTypes: []string{},
+		},
+	}
+
+	// 加载角色数据
+	characters, err := s.store.LoadCharacters(bookName)
+	if err != nil {
+		return data, nil
+	}
+
+	// 用于收集元数据
+	emotionTypesMap := make(map[string]bool)
+	minChapter := 0
+	maxChapter := 0
+
+	// 遍历角色，提取有情感弧线数据的角色
+	for _, char := range characters {
+		if len(char.EmotionalArc) == 0 {
+			continue
+		}
+
+		// 构建角色的情感弧线数据
+		arcData := EmotionArcData{
+			Character: char.Name,
+			Points:    []EmotionPoint{},
+		}
+
+		// 转换情感点数据
+		for _, ep := range char.EmotionalArc {
+			point := EmotionPoint{
+				Chapter:   ep.ChapterID,
+				Emotion:   ep.Emotion,
+				Intensity: ep.Intensity,
+				Trigger:   ep.Trigger,
+			}
+			arcData.Points = append(arcData.Points, point)
+
+			// 收集情感类型
+			emotionTypesMap[ep.Emotion] = true
+
+			// 更新章节范围
+			if minChapter == 0 || ep.ChapterID < minChapter {
+				minChapter = ep.ChapterID
+			}
+			if ep.ChapterID > maxChapter {
+				maxChapter = ep.ChapterID
+			}
+		}
+
+		data.Data = append(data.Data, arcData)
+		data.Metadata.Characters = append(data.Metadata.Characters, char.Name)
+	}
+
+	// 构建情感类型列表
+	for emotion := range emotionTypesMap {
+		data.Metadata.EmotionTypes = append(data.Metadata.EmotionTypes, emotion)
+	}
+
+	// 设置章节范围
+	if minChapter > 0 && maxChapter > 0 {
+		data.Metadata.ChapterRange = []int{minChapter, maxChapter}
+	}
+
+	return data, nil
+}
