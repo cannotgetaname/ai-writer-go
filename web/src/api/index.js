@@ -78,7 +78,7 @@ export const aiApi = {
     return eventSource
   },
   review: (data) => api.post('/ai/review', data),
-  reviewByParagraph: (data) => api.post('/ai/review-paragraph', data),
+  reviewByParagraph: (data) => api.post('/ai/review', data), // 与 review 相同，使用段落审稿
   getReview: (bookId, chapterId) => api.get(`/ai/review?book_name=${bookId}&chapter_id=${chapterId}`),
   audit: (data) => api.post('/ai/audit', data),
   rewrite: (data) => api.post('/ai/rewrite', data),
@@ -167,7 +167,13 @@ export const timelineApi = {
 
 export const graphApi = {
   get: (bookId) => api.get(`/books/${bookId}/graph`),
-  getECharts: (bookId) => api.get(`/books/${bookId}/graph/echarts`)
+  getECharts: (bookId, type = 'relationship') => api.get(`/books/${bookId}/graph/echarts`, { params: { type } }),
+  getRelationship: (bookId) => api.get(`/books/${bookId}/graph/echarts`, { params: { type: 'relationship' } }),
+  getCausal: (bookId) => api.get(`/books/${bookId}/graph/echarts`, { params: { type: 'causal' } }),
+  getForeshadow: (bookId) => api.get(`/books/${bookId}/graph/echarts`, { params: { type: 'foreshadow' } }),
+  getThread: (bookId) => api.get(`/books/${bookId}/graph/echarts`, { params: { type: 'thread' } }),
+  getEmotion: (bookId) => api.get(`/books/${bookId}/graph/echarts`, { params: { type: 'emotion' } }),
+  getTimeline: (bookId) => api.get(`/books/${bookId}/graph/echarts`, { params: { type: 'timeline' } })
 }
 
 // 伏笔
