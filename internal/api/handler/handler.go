@@ -3082,3 +3082,95 @@ func SyncReject(c *gin.Context) {
 		"rejected": rejected,
 	})
 }
+
+// ==================== 世界状态审计 ====================
+
+// SyncExtractAll 一键提取所有图谱数据
+func SyncExtractAll(c *gin.Context) {
+	bookID := c.Param("id")
+	chapterID := parseInt(c.Query("chapter_id"))
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	auditService := service.NewWorldAuditService(llmClient, jsonStore, getPromptsConfig())
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Minute)
+	defer cancel()
+
+	pending, err := auditService.ExtractAll(ctx, bookID, chapterID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, pending)
+}
+
+// SyncGetPendingGraphs 获取待审核图谱变更
+func SyncGetPendingGraphs(c *gin.Context) {
+	bookID := c.Param("id")
+
+	pending, err := jsonStore.LoadPendingGraphSync(bookID)
+	if err != nil || pending == nil {
+		c.JSON(http.StatusOK, gin.H{"message": "暂无待审核变更"})
+		return
+	}
+
+	c.JSON(http.StatusOK, pending)
+}
+
+// SyncApplyGraphs 应用审核后的图谱变更
+func SyncApplyGraphs(c *gin.Context) {
+	bookID := c.Param("id")
+
+	var req struct {
+		AcceptedIDs []string `json:"accepted_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, _ := getLLMClient()
+	auditService := service.NewWorldAuditService(llmClient, jsonStore, getPromptsConfig())
+
+	if err := auditService.ApplyChanges(c.Request.Context(), bookID, req.AcceptedIDs); err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "变更已应用"})
+}
+
+// AnalysisRun 手动运行分析
+func AnalysisRun(c *gin.Context) {
+	bookID := c.Param("id")
+	chapterID := parseInt(c.Query("chapter_id"))
+	analysisType := c.DefaultQuery("type", "manual")
+
+	analysisService := service.NewBookAnalysisService(jsonStore)
+	report, err := analysisService.RunAnalysis(bookID, chapterID, analysisType)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, report)
+}
+
+// AnalysisGetReports 获取历史分析报告
+func AnalysisGetReports(c *gin.Context) {
+	bookID := c.Param("id")
+
+	reports, err := jsonStore.LoadAnalysisReports(bookID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, reports)
+}
