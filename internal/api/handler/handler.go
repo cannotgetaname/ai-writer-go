@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -26,6 +27,23 @@ import (
 var jsonStore *store.JSONStore
 var billingStore *store.BillingStore
 var cfg *config.Config
+
+// validBookName 验证书名是否合法（防止路径注入）
+func validBookName(name string) bool {
+	if name == "" || len(name) > 100 {
+		return false
+	}
+	// 禁止路径遍历和分隔符
+	if strings.Contains(name, "..") || strings.ContainsAny(name, "/\\") {
+		return false
+	}
+	for _, r := range name {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' {
+			return false
+		}
+	}
+	return true
+}
 
 // InitStore 初始化存储
 func InitStore(s *store.JSONStore) {
@@ -120,10 +138,27 @@ func GetBook(c *gin.Context) {
 	c.JSON(http.StatusOK, book)
 }
 
-// UpdateBook 更新书籍
+// UpdateBook 更新书籍（重命名）
 func UpdateBook(c *gin.Context) {
-	// TODO: 实现更新逻辑
-	c.JSON(http.StatusOK, gin.H{"message": "not implemented"})
+	bookID := c.Param("id")
+
+	var req struct {
+		Name string `json:"name" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := jsonStore.RenameBook(bookID, req.Name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 返回更新后的书籍信息
+	book, _ := jsonStore.LoadBook(req.Name)
+	c.JSON(http.StatusOK, book)
 }
 
 // DeleteBook 删除书籍
@@ -376,6 +411,52 @@ func UpdateChapterContent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "保存成功"})
+}
+
+// UpdateParagraph 更新单个段落
+func UpdateParagraph(c *gin.Context) {
+	bookID := c.Param("id")
+	chapterID := parseInt(c.Param("chapter_id"))
+
+	var req struct {
+		ParagraphID string `json:"paragraph_id" binding:"required"`
+		Text        string `json:"text" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 加载段落数据
+	paragraphs, err := jsonStore.LoadChapterParagraphs(bookID, chapterID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 查找并更新目标段落
+	found := false
+	for i, p := range paragraphs.Paragraphs {
+		if p.ID == req.ParagraphID {
+			paragraphs.Paragraphs[i].Text = req.Text
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "段落不存在"})
+		return
+	}
+
+	// 保存更新后的段落
+	if err := jsonStore.SaveChapterParagraphs(bookID, paragraphs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "段落更新成功"})
 }
 
 // ==================== 设定管理 ====================
@@ -1028,29 +1109,29 @@ func UpdateCausalEvent(c *gin.Context) {
 		return
 	}
 
-	// 查找并更新
-	for _, ev := range events {
-		if ev.ID == eventID {
+	// 查找并更新（使用索引访问，避免值拷贝问题）
+	for i := range events {
+		if events[i].ID == eventID {
 			if req.Cause != "" {
-				ev.Cause = req.Cause
+				events[i].Cause = req.Cause
 			}
 			if req.Event != "" {
-				ev.Event = req.Event
+				events[i].Event = req.Event
 			}
 			if req.Effect != "" {
-				ev.Effect = req.Effect
+				events[i].Effect = req.Effect
 			}
 			if req.Decision != "" {
-				ev.Decision = req.Decision
+				events[i].Decision = req.Decision
 			}
 			if req.ChapterID > 0 {
-				ev.ChapterID = req.ChapterID
+				events[i].ChapterID = req.ChapterID
 			}
 			if req.Characters != nil {
-				ev.Characters = req.Characters
+				events[i].Characters = req.Characters
 			}
 			if req.Status != "" {
-				ev.Status = model.CausalStatus(req.Status)
+				events[i].Status = model.CausalStatus(req.Status)
 			}
 
 			if err := jsonStore.SaveCausalChains(bookID, events); err != nil {
@@ -1058,7 +1139,7 @@ func UpdateCausalEvent(c *gin.Context) {
 				return
 			}
 
-			c.JSON(http.StatusOK, ev)
+			c.JSON(http.StatusOK, events[i])
 			return
 		}
 	}
@@ -1164,32 +1245,32 @@ func UpdateForeshadow(c *gin.Context) {
 		return
 	}
 
-	// 查找并更新
-	for _, fs := range foreshadows {
-		if fs.ID == fsID {
+	// 查找并更新（使用索引访问，避免值拷贝问题）
+	for i := range foreshadows {
+		if foreshadows[i].ID == fsID {
 			if req.Content != "" {
-				fs.Content = req.Content
+				foreshadows[i].Content = req.Content
 			}
 			if req.Type != "" {
-				fs.Type = model.ForeshadowType(req.Type)
+				foreshadows[i].Type = model.ForeshadowType(req.Type)
 			}
 			if req.SourceChapter > 0 {
-				fs.SourceChapter = req.SourceChapter
+				foreshadows[i].SourceChapter = req.SourceChapter
 			}
 			if req.TargetChapter > 0 {
-				fs.TargetChapter = req.TargetChapter
+				foreshadows[i].TargetChapter = req.TargetChapter
 			}
 			if req.Importance != "" {
-				fs.Importance = model.Importance(req.Importance)
+				foreshadows[i].Importance = model.Importance(req.Importance)
 			}
-			fs.UpdatedAt = time.Now()
+			foreshadows[i].UpdatedAt = time.Now()
 
 			if err := jsonStore.SaveForeshadows(bookID, foreshadows); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 
-			c.JSON(http.StatusOK, fs)
+			c.JSON(http.StatusOK, foreshadows[i])
 			return
 		}
 	}
@@ -1219,20 +1300,20 @@ func ResolveForeshadow(c *gin.Context) {
 		return
 	}
 
-	// 查找并更新
-	for _, fs := range foreshadows {
-		if fs.ID == fsID {
-			fs.Status = model.ForeshadowResolved
-			fs.ResolvedChapter = req.ChapterID
-			fs.ResolvedContent = req.ResolvedContent
-			fs.UpdatedAt = time.Now()
+	// 查找并更新（使用索引访问，避免值拷贝问题）
+	for i := range foreshadows {
+		if foreshadows[i].ID == fsID {
+			foreshadows[i].Status = model.ForeshadowResolved
+			foreshadows[i].ResolvedChapter = req.ChapterID
+			foreshadows[i].ResolvedContent = req.ResolvedContent
+			foreshadows[i].UpdatedAt = time.Now()
 
 			if err := jsonStore.SaveForeshadows(bookID, foreshadows); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 
-			c.JSON(http.StatusOK, fs)
+			c.JSON(http.StatusOK, foreshadows[i])
 			return
 		}
 	}
@@ -1487,8 +1568,100 @@ func AIGenerateStream(c *gin.Context) {
 	c.Writer.Flush()
 }
 
+// getReviewsFile 获取审稿结果文件路径（验证书名防止路径注入）
+func getReviewsFile(bookName string) (string, error) {
+	if !validBookName(bookName) {
+		return "", fmt.Errorf("书名不合法: %s", bookName)
+	}
+	return filepath.Join("projects", bookName, "reviews.json"), nil
+}
+
+// loadReviewResult 加载审稿结果
+func loadReviewResult(bookName string, chapterID int) (*service.ParagraphReviewResult, error) {
+	filePath, err := getReviewsFile(bookName)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var reviews struct {
+		Reviews map[string]*service.ParagraphReviewResult `json:"reviews"`
+	}
+	if err := json.Unmarshal(data, &reviews); err != nil {
+		return nil, err
+	}
+
+	return reviews.Reviews[fmt.Sprintf("%d", chapterID)], nil
+}
+
+// saveReviewResult 保存审稿结果
+func saveReviewResult(bookName string, chapterID int, result *service.ParagraphReviewResult) error {
+	filePath, err := getReviewsFile(bookName)
+	if err != nil {
+		return err
+	}
+
+	// 确保目录存在
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	// 加载现有审稿
+	data, _ := os.ReadFile(filePath)
+
+	var reviews struct {
+		BookName string                                     `json:"book_name"`
+		Reviews  map[string]*service.ParagraphReviewResult `json:"reviews"`
+	}
+	reviews.Reviews = make(map[string]*service.ParagraphReviewResult)
+
+	if len(data) > 0 {
+		json.Unmarshal(data, &reviews)
+	}
+
+	// 更新指定章节的审稿结果
+	reviews.BookName = bookName
+	reviews.Reviews[fmt.Sprintf("%d", chapterID)] = result
+
+	// 保存
+	newData, err := json.MarshalIndent(reviews, "", "  ")
+		if err != nil {
+			return fmt.Errorf("序列化失败: %w", err)
+		}
+		return os.WriteFile(filePath, newData, 0644)
+	}
+
 // AIReview AI 审稿
 func AIReview(c *gin.Context) {
+	bookName := c.Query("book_name")
+	if bookName == "" {
+		bookName = c.Param("id")
+	}
+	chapterID := 0
+	if c.Query("chapter_id") != "" {
+		chapterID = parseInt(c.Query("chapter_id"))
+	}
+
+	// GET 请求：加载已保存的审稿结果
+	if c.Request.Method == "GET" {
+		if bookName == "" || chapterID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "缺少参数"})
+			return
+		}
+		result, err := loadReviewResult(bookName, chapterID)
+		if err != nil || result == nil {
+			c.JSON(http.StatusOK, gin.H{"message": "暂无审稿结果"})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+		return
+	}
+
+	// POST 请求：执行审稿
 	var req struct {
 		BookName  string `json:"book_name"`
 		ChapterID int    `json:"chapter_id"`
@@ -1498,9 +1671,11 @@ func AIReview(c *gin.Context) {
 		return
 	}
 
-	bookName := req.BookName
-	if bookName == "" {
-		bookName = c.Param("id")
+	if req.BookName != "" {
+		bookName = req.BookName
+	}
+	if req.ChapterID != 0 {
+		chapterID = req.ChapterID
 	}
 
 	// 获取 LLM 客户端
@@ -1516,11 +1691,20 @@ func AIReview(c *gin.Context) {
 	// 创建审稿服务
 	reviewService := service.NewReviewService(llmClient, jsonStore, getPromptsConfig())
 
-	// 审稿
-	result, err := reviewService.ReviewChapter(c.Request.Context(), bookName, req.ChapterID)
+	// 按段落审稿
+	result, err := reviewService.ReviewChapterByParagraph(c.Request.Context(), bookName, chapterID)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "审稿失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 保存审稿结果
+	if err := saveReviewResult(bookName, chapterID, result); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "审稿完成但保存失败: " + err.Error(),
+			"result":  result,
 		})
 		return
 	}
@@ -1602,6 +1786,52 @@ func AIRewrite(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"content": content,
+		"message": "重写成功",
+	})
+}
+
+// AIRewriteParagraph AI 重写段落
+func AIRewriteParagraph(c *gin.Context) {
+	var req struct {
+		BookName    string `json:"book_name"`
+		ChapterID   int    `json:"chapter_id"`
+		ParagraphID string `json:"paragraph_id"`
+		Instruction string `json:"instruction"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	bookName := req.BookName
+	if bookName == "" {
+		bookName = c.Param("id")
+	}
+
+	// 获取 LLM 客户端
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "AI服务未配置",
+			"hint":    "请在系统设置中配置API Key后重试",
+		})
+		return
+	}
+
+	// 创建写作服务
+	writerService := service.NewWriterService(llmClient, jsonStore, getPromptsConfig())
+
+	// 重写段落
+	newContent, err := writerService.RewriteParagraph(c.Request.Context(), bookName, req.ChapterID, req.ParagraphID, req.Instruction)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "重写失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"content": newContent,
 		"message": "重写成功",
 	})
 }
@@ -1833,9 +2063,42 @@ func GetKnowledgeGraph(c *gin.Context) {
 // GetEChartsData 获取 ECharts 图谱数据
 func GetEChartsData(c *gin.Context) {
 	bookID := c.Param("id")
+	graphType := c.DefaultQuery("type", "relationship")
+
+	// 验证图谱类型
+	validTypes := map[string]bool{
+		"relationship": true,
+		"causal":       true,
+		"foreshadow":   true,
+		"thread":       true,
+		"emotion":      true,
+		"timeline":     true,
+	}
+	if !validTypes[graphType] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的图谱类型: " + graphType})
+		return
+	}
 
 	graphService := service.NewGraphService(jsonStore)
-	data, err := graphService.BuildGraph(bookID)
+
+	var data interface{}
+	var err error
+
+	switch graphType {
+	case "relationship":
+		data, err = graphService.BuildGraph(bookID)
+	case "causal":
+		data, err = graphService.BuildCausalGraph(bookID)
+	case "foreshadow":
+		data, err = graphService.BuildForeshadowGraph(bookID)
+	case "thread":
+		data, err = graphService.BuildThreadGraph(bookID)
+	case "emotion":
+		data, err = graphService.BuildEmotionGraph(bookID)
+	case "timeline":
+		data, err = graphService.BuildTimelineGraph(bookID)
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -2571,29 +2834,49 @@ func BatchReset(c *gin.Context) {
 
 // ==================== 状态同步 ====================
 
-// getPendingChangesFile 获取待审核变更文件路径
-func getPendingChangesFile(bookName string) string {
-	return filepath.Join(cfg.Server.DataDir, "projects", bookName, "pending_changes.json")
+// getPendingChangesFile 获取待审核变更文件路径（验证书名防止路径注入）
+func getPendingChangesFile(bookName string) (string, error) {
+	if !validBookName(bookName) {
+		return "", fmt.Errorf("书名不合法: %s", bookName)
+	}
+	return filepath.Join("projects", bookName, "pending_changes.json"), nil
 }
 
 // loadPendingChanges 加载待审核变更
-func loadPendingChanges(bookName string) *service.PendingChanges {
-	data, err := os.ReadFile(getPendingChangesFile(bookName))
+func loadPendingChanges(bookName string) (*service.PendingChanges, error) {
+	filePath, err := getPendingChangesFile(bookName)
 	if err != nil {
-		return nil
+		return nil, err
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
 	}
 
 	var pending service.PendingChanges
 	if err := json.Unmarshal(data, &pending); err != nil {
-		return nil
+		return nil, err
 	}
-	return &pending
+	return &pending, nil
 }
 
 // savePendingChanges 保存待审核变更
-func savePendingChanges(bookName string, pending *service.PendingChanges) {
-	data, _ := json.MarshalIndent(pending, "", "  ")
-	os.WriteFile(getPendingChangesFile(bookName), data, 0644)
+func savePendingChanges(bookName string, pending *service.PendingChanges) error {
+	filePath, err := getPendingChangesFile(bookName)
+	if err != nil {
+		return err
+	}
+	// 确保目录存在
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	data, err := json.MarshalIndent(pending, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化失败: %w", err)
+	}
+	return os.WriteFile(filePath, data, 0644)
 }
 
 // SyncExtract 从章节提取状态变更
@@ -2639,7 +2922,10 @@ func SyncExtract(c *gin.Context) {
 	}
 
 	// 保存待审核变更
-	savePendingChanges(bookName, pending)
+	if err := savePendingChanges(bookName, pending); err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "保存失败: " + err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "提取完成",
@@ -2656,8 +2942,8 @@ func SyncPending(c *gin.Context) {
 		bookName = c.Param("id")
 	}
 
-	pending := loadPendingChanges(bookName)
-	if pending == nil || len(pending.Changes) == 0 {
+	pending, err := loadPendingChanges(bookName)
+	if err != nil || pending == nil || len(pending.Changes) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "暂无待审核变更",
 			"changes": []interface{}{},
@@ -2684,8 +2970,8 @@ func SyncApply(c *gin.Context) {
 		bookName = c.Param("id")
 	}
 
-	pending := loadPendingChanges(bookName)
-	if pending == nil || len(pending.Changes) == 0 {
+	pending, err := loadPendingChanges(bookName)
+	if err != nil || pending == nil || len(pending.Changes) == 0 {
 		c.JSON(http.StatusOK, gin.H{"error": "暂无待审核变更"})
 		return
 	}
@@ -2698,9 +2984,14 @@ func SyncApply(c *gin.Context) {
 
 	for _, change := range pending.Changes {
 		// 如果指定了变更ID，只应用该变更
-		if req.ChangeID != "" && change.ID != req.ChangeID && len(change.ID) >= 8 && change.ID[:8] != req.ChangeID {
-			remaining = append(remaining, change)
-			continue
+		if req.ChangeID != "" {
+			// 检查是否匹配（精确匹配或8字符前缀匹配）
+			matchesExact := change.ID == req.ChangeID
+			matchesPrefix := len(change.ID) >= 8 && len(req.ChangeID) >= 8 && change.ID[:8] == req.ChangeID[:8]
+			if !matchesExact && !matchesPrefix {
+				remaining = append(remaining, change)
+				continue
+			}
 		}
 
 		// 应用变更
@@ -2714,9 +3005,13 @@ func SyncApply(c *gin.Context) {
 	// 更新待审核列表
 	if len(remaining) > 0 {
 		pending.Changes = remaining
-		savePendingChanges(bookName, pending)
+		if err := savePendingChanges(bookName, pending); err != nil {
+			c.JSON(http.StatusOK, gin.H{"error": "保存剩余变更失败: " + err.Error()})
+			return
+		}
 	} else {
-		os.Remove(getPendingChangesFile(bookName))
+		filePath, _ := getPendingChangesFile(bookName)
+		os.Remove(filePath)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -2743,15 +3038,16 @@ func SyncReject(c *gin.Context) {
 		bookName = c.Param("id")
 	}
 
-	pending := loadPendingChanges(bookName)
-	if pending == nil || len(pending.Changes) == 0 {
+	pending, err := loadPendingChanges(bookName)
+	if err != nil || pending == nil || len(pending.Changes) == 0 {
 		c.JSON(http.StatusOK, gin.H{"error": "暂无待审核变更"})
 		return
 	}
 
 	if req.ChangeID == "" {
 		// 丢弃所有变更
-		os.Remove(getPendingChangesFile(bookName))
+		filePath, _ := getPendingChangesFile(bookName)
+		os.Remove(filePath)
 		c.JSON(http.StatusOK, gin.H{
 			"message": "已丢弃所有变更",
 			"rejected": len(pending.Changes),
@@ -2772,9 +3068,13 @@ func SyncReject(c *gin.Context) {
 
 	if len(remaining) > 0 {
 		pending.Changes = remaining
-		savePendingChanges(bookName, pending)
+		if err := savePendingChanges(bookName, pending); err != nil {
+			c.JSON(http.StatusOK, gin.H{"error": "保存剩余变更失败: " + err.Error()})
+			return
+		}
 	} else {
-		os.Remove(getPendingChangesFile(bookName))
+		filePath, _ := getPendingChangesFile(bookName)
+		os.Remove(filePath)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
