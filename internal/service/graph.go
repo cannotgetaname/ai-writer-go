@@ -894,3 +894,142 @@ func (s *GraphService) BuildEmotionGraph(bookName string) (*EmotionGraphData, er
 
 	return data, nil
 }
+
+// BuildTimelineGraph 构建时间线图谱
+func (s *GraphService) BuildTimelineGraph(bookName string) (*GraphData, error) {
+	data := &GraphData{
+		Nodes: []GraphNode{},
+		Links: []GraphLink{},
+		Categories: []Category{
+			{Name: "event"},
+			{Name: "chapter"},
+			{Name: "location"},
+			{Name: "character"},
+		},
+	}
+
+	colorMap := map[string]string{
+		"event":     "#5470c6", // 蓝色
+		"chapter":   "#91cc75", // 绿色
+		"location":  "#fac858", // 黄色
+		"character": "#ee6666", // 红色
+	}
+
+	nodeNames := make(map[string]bool)
+
+	addNode := func(name, category string, symbolSize int, value string) {
+		if nodeNames[name] {
+			return
+		}
+		nodeNames[name] = true
+		node := GraphNode{
+			Name:       name,
+			Category:   category,
+			SymbolSize: symbolSize,
+			Value:      truncateStr(value, 50),
+		}
+		node.ItemStyle.Color = colorMap[category]
+		node.Label.Show = true
+		node.Label.Position = "right"
+		data.Nodes = append(data.Nodes, node)
+	}
+
+	addLink := func(source, target, relation string, isDashed bool) {
+		if source == "" || target == "" || source == target {
+			return
+		}
+		link := GraphLink{
+			Source: source,
+			Target: target,
+			Value:  relation,
+		}
+		if isDashed {
+			link.LineStyle.Type = "dashed"
+		} else {
+			link.LineStyle.Type = "solid"
+		}
+		link.LineStyle.Color = "source"
+		link.LineStyle.Curveness = 0.2
+		data.Links = append(data.Links, link)
+	}
+
+	// 加载时间线数据
+	timeline, err := s.store.LoadTimeline(bookName)
+	if err != nil {
+		return data, nil
+	}
+
+	// 加载角色和地点用于关联
+	characters, _ := s.store.LoadCharacters(bookName)
+	characterMap := make(map[string]bool)
+	for _, char := range characters {
+		characterMap[char.Name] = true
+	}
+
+	locations, _ := s.store.LoadLocations(bookName)
+	locationMap := make(map[string]bool)
+	for _, loc := range locations {
+		locationMap[loc.Name] = true
+	}
+
+	// 按章节分组事件
+	chapterEvents := make(map[int][]model.TimelineEvent)
+	for _, event := range timeline {
+		chapterEvents[event.ChapterID] = append(chapterEvents[event.ChapterID], event)
+	}
+
+	// 找出最大章节ID用于遍历
+	maxChapterID := 0
+	for chID := range chapterEvents {
+		if chID > maxChapterID {
+			maxChapterID = chID
+		}
+	}
+
+	// 构建章节节点和时间顺序链接
+	var prevChapterLabel string
+	for chID := 1; chID <= maxChapterID; chID++ {
+		events := chapterEvents[chID]
+		if len(events) == 0 {
+			continue
+		}
+
+		chLabel := fmt.Sprintf("第%d章", chID)
+		// 添加时间标签作为值
+		timeLabel := events[0].TimeLabel
+		addNode(chLabel, "chapter", 30, timeLabel)
+
+		// 章节间时间顺序链接
+		if prevChapterLabel != "" {
+			addLink(prevChapterLabel, chLabel, "时间顺序", true)
+		}
+		prevChapterLabel = chLabel
+
+		// 添加章节内的事件
+		for _, event := range events {
+			for _, evText := range event.Events {
+				eventLabel := fmt.Sprintf("第%d章: %s", chID, truncateStr(evText, 20))
+				addNode(eventLabel, "event", 35, evText)
+
+				// 事件 → 章节
+				addLink(eventLabel, chLabel, "归属", false)
+
+				// 事件 → 地点
+				if event.Location != "" && locationMap[event.Location] {
+					addNode(event.Location, "location", 25, "")
+					addLink(eventLabel, event.Location, "发生地点", false)
+				}
+
+				// 事件 → 角色
+				for _, charName := range event.Characters {
+					if characterMap[charName] {
+						addNode(charName, "character", 35, "")
+						addLink(eventLabel, charName, "参与角色", false)
+					}
+				}
+			}
+		}
+	}
+
+	return data, nil
+}

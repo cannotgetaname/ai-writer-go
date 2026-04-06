@@ -475,6 +475,19 @@ func (s *JSONStore) LoadThreads(bookName string) ([]*model.NarrativeThread, erro
 	return threads, nil
 }
 
+// LoadTimeline 加载时间线事件
+func (s *JSONStore) LoadTimeline(bookName string) ([]model.TimelineEvent, error) {
+	if !validName(bookName) {
+		return nil, fmt.Errorf("书名不合法: %s", bookName)
+	}
+	path := filepath.Join(s.basePath, "projects", bookName, "timeline.json")
+	var timeline []model.TimelineEvent
+	if err := s.loadJSON(path, &timeline); err != nil {
+		return nil, err
+	}
+	return timeline, nil
+}
+
 // ==================== 章节内容（段落存储） ====================
 
 // LoadChapterParagraphs 加载章节段落
