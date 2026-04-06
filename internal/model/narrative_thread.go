@@ -46,6 +46,9 @@ type NarrativeThread struct {
 	// 关联章节
 	Chapters []int `json:"chapters"`
 
+	// 新增字段
+	AutoDetected bool `json:"auto_detected"`
+
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -58,4 +61,7 @@ type TimelineEvent struct {
 	Events      []string `json:"events"`
 	Characters  []string `json:"characters,omitempty"`
 	Location    string   `json:"location,omitempty"`
+
+	// 新增字段
+	AutoDetected bool `json:"auto_detected"`
 }
