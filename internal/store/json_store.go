@@ -1150,3 +1150,157 @@ func (s *JSONStore) saveChaptersLocked(bookName string, chapters []*model.Chapte
 	path := filepath.Join(bookPath, "structure.json")
 	return s.saveJSON(path, chapters)
 }
+
+// ==================== 分析报告存储 ====================
+
+// LoadAnalysisReports 加载分析报告列表
+func (s *JSONStore) LoadAnalysisReports(bookName string) ([]*model.AnalysisReport, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if !validName(bookName) {
+		return nil, fmt.Errorf("书名不合法: %s", bookName)
+	}
+
+	path := filepath.Join(s.basePath, "projects", bookName, "analysis_reports.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*model.AnalysisReport{}, nil
+		}
+		return nil, err
+	}
+
+	var reports []*model.AnalysisReport
+	if err := json.Unmarshal(data, &reports); err != nil {
+		return nil, err
+	}
+	return reports, nil
+}
+
+// SaveAnalysisReports 保存分析报告列表
+func (s *JSONStore) SaveAnalysisReports(bookName string, reports []*model.AnalysisReport) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !validName(bookName) {
+		return fmt.Errorf("书名不合法: %s", bookName)
+	}
+
+	path := filepath.Join(s.basePath, "projects", bookName, "analysis_reports.json")
+	data, err := json.MarshalIndent(reports, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// loadAnalysisReportsLocked 加载分析报告列表（内部方法，调用者需持锁）
+func (s *JSONStore) loadAnalysisReportsLocked(bookName string) ([]*model.AnalysisReport, error) {
+	bookPath, err := s.getBookPath(bookName)
+	if err != nil {
+		return nil, err
+	}
+
+	path := filepath.Join(bookPath, "analysis_reports.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*model.AnalysisReport{}, nil
+		}
+		return nil, err
+	}
+
+	var reports []*model.AnalysisReport
+	if err := json.Unmarshal(data, &reports); err != nil {
+		return nil, err
+	}
+	return reports, nil
+}
+
+// saveAnalysisReportsLocked 保存分析报告列表（内部方法，调用者需持锁）
+func (s *JSONStore) saveAnalysisReportsLocked(bookName string, reports []*model.AnalysisReport) error {
+	bookPath, err := s.getBookPath(bookName)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(bookPath, "analysis_reports.json")
+	data, err := json.MarshalIndent(reports, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// AppendAnalysisReport 追加分析报告
+func (s *JSONStore) AppendAnalysisReport(bookName string, report *model.AnalysisReport) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	reports, err := s.loadAnalysisReportsLocked(bookName)
+	if err != nil {
+		return err
+	}
+	reports = append(reports, report)
+	return s.saveAnalysisReportsLocked(bookName, reports)
+}
+
+// LoadPendingGraphSync 加载待审核图谱变更
+func (s *JSONStore) LoadPendingGraphSync(bookName string) (*model.PendingGraphSync, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if !validName(bookName) {
+		return nil, fmt.Errorf("书名不合法: %s", bookName)
+	}
+
+	path := filepath.Join(s.basePath, "projects", bookName, "pending_graph_sync.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var pending model.PendingGraphSync
+	if err := json.Unmarshal(data, &pending); err != nil {
+		return nil, err
+	}
+	return &pending, nil
+}
+
+// SavePendingGraphSync 保存待审核图谱变更
+func (s *JSONStore) SavePendingGraphSync(bookName string, pending *model.PendingGraphSync) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !validName(bookName) {
+		return fmt.Errorf("书名不合法: %s", bookName)
+	}
+
+	path := filepath.Join(s.basePath, "projects", bookName, "pending_graph_sync.json")
+	data, err := json.MarshalIndent(pending, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// ClearPendingGraphSync 清除待审核图谱变更
+func (s *JSONStore) ClearPendingGraphSync(bookName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !validName(bookName) {
+		return fmt.Errorf("书名不合法: %s", bookName)
+	}
+
+	path := filepath.Join(s.basePath, "projects", bookName, "pending_graph_sync.json")
+	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil // 文件不存在视为成功
+	}
+	return err
+}
