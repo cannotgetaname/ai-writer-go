@@ -57,6 +57,10 @@ type Foreshadow struct {
 	// 关联因果链
 	CausalEventID string `json:"causal_event_id,omitempty"`
 
+	// AI检测相关
+	AutoDetected  bool   `json:"auto_detected"`   // 是否AI检测
+	SourceContext string `json:"source_context"`  // 原文片段
+
 	Notes string `json:"notes,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
