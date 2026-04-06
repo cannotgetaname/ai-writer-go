@@ -694,3 +694,128 @@ func (s *GraphService) BuildForeshadowGraph(bookName string) (*GraphData, error)
 
 	return data, nil
 }
+
+// BuildThreadGraph 构建叙事线程图谱
+func (s *GraphService) BuildThreadGraph(bookName string) (*GraphData, error) {
+	data := &GraphData{
+		Nodes: []GraphNode{},
+		Links: []GraphLink{},
+		Categories: []Category{
+			{Name: "thread"},
+			{Name: "chapter"},
+			{Name: "character"},
+		},
+	}
+
+	// 线程类型颜色映射
+	threadTypeColorMap := map[string]string{
+		"main":      "#ee6666", // 红色 - 主线
+		"sub":       "#5470c6", // 蓝色 - 支线
+		"parallel":  "#91cc75", // 绿色 - 并行线
+		"flashback": "#9a60b4", // 紫色 - 闪回线
+	}
+
+	// 线程类型大小映射
+	threadTypeSizeMap := map[string]int{
+		"main":      45,
+		"sub":       35,
+		"parallel":  30,
+		"flashback": 30,
+	}
+
+	nodeNames := make(map[string]bool)
+
+	addNode := func(name, category string, symbolSize int, value string, threadType string) {
+		if nodeNames[name] {
+			return
+		}
+		nodeNames[name] = true
+		node := GraphNode{
+			Name:       name,
+			Category:   category,
+			SymbolSize: symbolSize,
+			Value:      truncateStr(value, 50),
+		}
+		if category == "thread" {
+			node.ItemStyle.Color = threadTypeColorMap[threadType]
+		} else if category == "chapter" {
+			node.ItemStyle.Color = "#91cc75" // 绿色
+		} else if category == "character" {
+			node.ItemStyle.Color = "#5470c6" // 蓝色
+		}
+		node.Label.Show = true
+		node.Label.Position = "right"
+		data.Nodes = append(data.Nodes, node)
+	}
+
+	addLink := func(source, target, relation string, isDashed bool, color string) {
+		if source == "" || target == "" || source == target {
+			return
+		}
+		link := GraphLink{
+			Source: source,
+			Target: target,
+			Value:  relation,
+		}
+		if isDashed {
+			link.LineStyle.Type = "dashed"
+		} else {
+			link.LineStyle.Type = "solid"
+		}
+		link.LineStyle.Color = color
+		link.LineStyle.Curveness = 0.2
+		data.Links = append(data.Links, link)
+	}
+
+	// 加载线程数据
+	threads, err := s.store.LoadThreads(bookName)
+	if err != nil {
+		return data, nil
+	}
+
+	// 加载角色数据用于 POV 连接
+	characters, _ := s.store.LoadCharacters(bookName)
+	characterMap := make(map[string]bool)
+	for _, char := range characters {
+		characterMap[char.Name] = true
+	}
+
+	for _, thread := range threads {
+		// 线程节点
+		threadLabel := truncateStr(thread.Name, 25)
+		size := threadTypeSizeMap[string(thread.Type)]
+		if size == 0 {
+			size = 30
+		}
+		addNode(threadLabel, "thread", size, thread.Goal, string(thread.Type))
+
+		// 连接涉及的章节
+		for _, chapterID := range thread.Chapters {
+			chapterLabel := fmt.Sprintf("第%d章", chapterID)
+			addNode(chapterLabel, "chapter", 25, "", "")
+			addLink(threadLabel, chapterLabel, "涉及", true, "#91cc75")
+		}
+
+		// 起止章节（实线连接）
+		if thread.StartChapter > 0 {
+			startChLabel := fmt.Sprintf("第%d章", thread.StartChapter)
+			addNode(startChLabel, "chapter", 25, "", "")
+			addLink(threadLabel, startChLabel, "起点", false, "#5470c6")
+		}
+		if thread.EndChapter > 0 {
+			endChLabel := fmt.Sprintf("第%d章", thread.EndChapter)
+			addNode(endChLabel, "chapter", 25, "", "")
+			addLink(threadLabel, endChLabel, "终点", false, "#ee6666")
+		}
+
+		// 连接 POV 角色
+		for _, povChar := range thread.POVCharacters {
+			if characterMap[povChar] {
+				addNode(povChar, "character", 30, "", "")
+				addLink(threadLabel, povChar, "POV", false, "#9a60b4")
+			}
+		}
+	}
+
+	return data, nil
+}
