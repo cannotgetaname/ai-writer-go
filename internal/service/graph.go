@@ -513,7 +513,7 @@ func (s *GraphService) BuildCausalGraph(bookName string) (*GraphData, error) {
 
 	nodeNames := make(map[string]bool)
 
-	addNode := func(name, category string, symbolSize int, value string, chapterID int) {
+	addNode := func(name, category string, symbolSize int, value string) {
 		if nodeNames[name] {
 			return
 		}
@@ -573,11 +573,11 @@ func (s *GraphService) BuildCausalGraph(bookName string) (*GraphData, error) {
 	for _, event := range events {
 		// 事件节点
 		eventLabel := fmt.Sprintf("第%d章: %s", event.ChapterID, truncateStr(event.Event, 20))
-		addNode(eventLabel, "event", 35, event.Event, event.ChapterID)
+		addNode(eventLabel, "event", 35, event.Event)
 
 		// 添加章节节点（用于定位）
 		chapterLabel := fmt.Sprintf("第%d章", event.ChapterID)
-		addNode(chapterLabel, "chapter", 25, "", event.ChapterID)
+		addNode(chapterLabel, "chapter", 25, "")
 
 		// 事件 → 章节
 		addLink(eventLabel, chapterLabel, "归属")
