@@ -43,6 +43,7 @@ type ForeshadowItem struct {
 
 // ThreadUpdateItem 线程更新项
 type ThreadUpdateItem struct {
+	ID            string   `json:"id"`
 	ThreadName    string   `json:"thread_name"`
 	ThreadID      string   `json:"thread_id,omitempty"`
 	UpdateType    string   `json:"update_type"` // new / chapter_add / pov_change
@@ -53,6 +54,7 @@ type ThreadUpdateItem struct {
 
 // EmotionPointItem 情感点项
 type EmotionPointItem struct {
+	ID            string `json:"id"`
 	CharacterName string `json:"character_name"`
 	EmotionPoint
 	Status string `json:"status"`
@@ -60,6 +62,7 @@ type EmotionPointItem struct {
 
 // TimelineEventItem 时间线事件项
 type TimelineEventItem struct {
+	ID            string `json:"id"`
 	TimelineEvent
 	Status string `json:"status"`
 }
