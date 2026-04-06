@@ -96,6 +96,9 @@ type EmotionPoint struct {
 	Emotion   string `json:"emotion"`   // 情绪类型：愤怒/悲伤/喜悦
 	Intensity int    `json:"intensity"` // 1-10 强度
 	Trigger   string `json:"trigger"`   // 触发事件
+
+	// 新增字段
+	SourceContext string `json:"source_context"` // 触发原文片段
 }
 
 // KnownInfo 已知信息（信息边界）
