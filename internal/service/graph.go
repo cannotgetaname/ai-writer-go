@@ -55,6 +55,35 @@ type Category struct {
 	Name string `json:"name"`
 }
 
+// EmotionGraphData 情感图谱数据（折线图/热力图）
+type EmotionGraphData struct {
+	Type      string           `json:"type"`
+	ChartType string           `json:"chart_type"` // line / heatmap
+	Data      []EmotionArcData `json:"data"`
+	Metadata  EmotionMetadata  `json:"metadata"`
+}
+
+// EmotionArcData 单个角色的情感弧线
+type EmotionArcData struct {
+	Character string         `json:"character"`
+	Points    []EmotionPoint `json:"points"`
+}
+
+// EmotionPoint 情感点
+type EmotionPoint struct {
+	Chapter   int    `json:"chapter"`
+	Emotion   string `json:"emotion"`
+	Intensity int    `json:"intensity"`
+	Trigger   string `json:"trigger"`
+}
+
+// EmotionMetadata 情感图谱元数据
+type EmotionMetadata struct {
+	Characters   []string `json:"characters"`
+	ChapterRange []int    `json:"chapter_range"`
+	EmotionTypes []string `json:"emotion_types"`
+}
+
 // BuildGraph 构建知识图谱
 func (s *GraphService) BuildGraph(bookName string) (*GraphData, error) {
 	data := &GraphData{
@@ -237,24 +266,27 @@ func (s *GraphService) BuildGraph(bookName string) (*GraphData, error) {
 		if item.Owner != "" {
 			addNode(item.Owner, "character", 35, "")
 			addOwnershipLink(item.Name, item.Owner, "持有")
-		}
+			// 有持有者时，不再添加物品->势力/宗门/地点的边
+			// 因为通过持有者可以追溯到其所属势力/地点
+		} else {
+			// 无持有者时，才显示物品的直接归属关系
+			// 物品 → 势力（所属）
+			if item.Faction != "" {
+				addNode(item.Faction, "faction", 50, "")
+				addOwnershipLink(item.Name, item.Faction, "所属")
+			}
 
-		// 物品 → 势力（所属）
-		if item.Faction != "" {
-			addNode(item.Faction, "faction", 50, "")
-			addOwnershipLink(item.Name, item.Faction, "所属")
-		}
+			// 物品 → 宗门（所属）
+			if item.Sect != "" && item.Sect != item.Faction {
+				addNode(item.Sect, "faction", 45, "")
+				addOwnershipLink(item.Name, item.Sect, "宗门")
+			}
 
-		// 物品 → 宗门（所属）
-		if item.Sect != "" && item.Sect != item.Faction {
-			addNode(item.Sect, "faction", 45, "")
-			addOwnershipLink(item.Name, item.Sect, "宗门")
-		}
-
-		// 物品 → 地点（所在）
-		if item.Location != "" {
-			addNode(item.Location, "location", 30, "")
-			addOwnershipLink(item.Name, item.Location, "所在")
+			// 物品 → 地点（所在）
+			if item.Location != "" {
+				addNode(item.Location, "location", 30, "")
+				addOwnershipLink(item.Name, item.Location, "所在")
+			}
 		}
 	}
 
@@ -280,15 +312,33 @@ func (s *GraphService) BuildGraph(bookName string) (*GraphData, error) {
 		}
 
 		// 势力首领关系：首领人物 → 势力（统领）
+		// 只有当首领在人物列表中存在时才添加边
 		if faction.Leader != "" {
-			addNode(faction.Leader, "character", 35, "")
-			addOwnershipLink(faction.Leader, faction.Name, "统领")
+			leaderExists := false
+			for _, char := range characters {
+				if char.Name == faction.Leader {
+					leaderExists = true
+					break
+				}
+			}
+			if leaderExists {
+				addOwnershipLink(faction.Leader, faction.Name, "统领")
+			}
 		}
 
 		// 势力成员关系：成员 → 势力
+		// 只有当成员在人物列表中存在时才添加边
 		for _, member := range faction.Members {
-			addNode(member, "character", 35, "")
-			addOwnershipLink(member, faction.Name, "成员")
+			memberExists := false
+			for _, char := range characters {
+				if char.Name == member {
+					memberExists = true
+					break
+				}
+			}
+			if memberExists {
+				addOwnershipLink(member, faction.Name, "成员")
+			}
 		}
 
 		// 势力领地关系：地点 → 势力（已在上面的地点部分处理，这里跳过重复）
