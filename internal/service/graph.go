@@ -4,6 +4,7 @@ import (
 	"ai-writer/internal/model"
 	"ai-writer/internal/store"
 	"fmt"
+	"sort"
 )
 
 // GraphService 知识图谱服务
@@ -56,18 +57,17 @@ type Category struct {
 	Name string `json:"name"`
 }
 
-// EmotionGraphData 情感图谱数据（折线图/热力图）
+// EmotionGraphData 情感图谱数据（折线图）
+// 返回 ECharts 期望的格式：series/xAxis
 type EmotionGraphData struct {
-	Type      string           `json:"type"`
-	ChartType string           `json:"chart_type"` // line / heatmap
-	Data      []EmotionArcData `json:"data"`
-	Metadata  EmotionMetadata  `json:"metadata"`
+	Series []EmotionSeries `json:"series"`
+	XAxis  []string        `json:"xAxis"`
 }
 
-// EmotionArcData 单个角色的情感弧线
-type EmotionArcData struct {
-	Character string         `json:"character"`
-	Points    []EmotionPoint `json:"points"`
+// EmotionSeries 情感系列数据
+type EmotionSeries struct {
+	Name string `json:"name"`
+	Data []int  `json:"data"`
 }
 
 // EmotionPoint 情感点
@@ -127,7 +127,7 @@ func (s *GraphService) BuildGraph(bookName string) (*GraphData, error) {
 			Name:       name,
 			Category:   category,
 			SymbolSize: symbolSize,
-			Value:      truncateStr(value, 30),
+			Value:      truncateStr(value, 100),
 		}
 		node.ItemStyle.Color = colorMap[category]
 		node.Label.Show = true
@@ -445,12 +445,14 @@ func (s *GraphService) GetCharacterContext(bookName string, characterName string
 	return context, nil
 }
 
-// truncateStr 截断字符串
+// truncateStr 截断字符串（按UTF-8字符截断，避免乱码）
 func truncateStr(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	// 将字符串转换为 rune 切片，按字符数截断
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	return string(runes[:maxLen]) + "..."
 }
 
 // FindPath 查找两个节点之间的关系路径
@@ -522,7 +524,7 @@ func (s *GraphService) BuildCausalGraph(bookName string) (*GraphData, error) {
 			Name:       name,
 			Category:   category,
 			SymbolSize: symbolSize,
-			Value:      truncateStr(value, 30),
+			Value:      truncateStr(value, 100),
 		}
 		node.ItemStyle.Color = colorMap[category]
 		node.Label.Show = true
@@ -572,7 +574,7 @@ func (s *GraphService) BuildCausalGraph(bookName string) (*GraphData, error) {
 	// 构建事件节点和因果链接
 	for _, event := range events {
 		// 事件节点
-		eventLabel := fmt.Sprintf("第%d章: %s", event.ChapterID, truncateStr(event.Event, 20))
+		eventLabel := fmt.Sprintf("第%d章: %s", event.ChapterID, truncateStr(event.Event, 40))
 		addNode(eventLabel, "event", 35, event.Event)
 
 		// 添加章节节点（用于定位）
@@ -821,16 +823,11 @@ func (s *GraphService) BuildThreadGraph(bookName string) (*GraphData, error) {
 }
 
 // BuildEmotionGraph 构建情感图谱（折线图）
+// 返回 ECharts 期望的格式：series 和 xAxis
 func (s *GraphService) BuildEmotionGraph(bookName string) (*EmotionGraphData, error) {
 	data := &EmotionGraphData{
-		Type:      "emotion",
-		ChartType: "line",
-		Data:      []EmotionArcData{},
-		Metadata: EmotionMetadata{
-			Characters:   []string{},
-			ChapterRange: []int{},
-			EmotionTypes: []string{},
-		},
+		Series: []EmotionSeries{},
+		XAxis:  []string{},
 	}
 
 	// 加载角色数据
@@ -839,10 +836,9 @@ func (s *GraphService) BuildEmotionGraph(bookName string) (*EmotionGraphData, er
 		return data, nil
 	}
 
-	// 用于收集元数据
-	emotionTypesMap := make(map[string]bool)
-	minChapter := 0
-	maxChapter := 0
+	// 找出所有章节范围
+	chapterSet := make(map[int]bool)
+	characterEmotions := make(map[string]map[int]int) // character -> chapter -> intensity
 
 	// 遍历角色，提取有情感弧线数据的角色
 	for _, char := range characters {
@@ -850,46 +846,43 @@ func (s *GraphService) BuildEmotionGraph(bookName string) (*EmotionGraphData, er
 			continue
 		}
 
-		// 构建角色的情感弧线数据
-		arcData := EmotionArcData{
-			Character: char.Name,
-			Points:    []EmotionPoint{},
-		}
-
-		// 转换情感点数据
+		// 构建角色的情感数据
+		characterEmotions[char.Name] = make(map[int]int)
 		for _, ep := range char.EmotionalArc {
-			point := EmotionPoint{
-				Chapter:   ep.ChapterID,
-				Emotion:   ep.Emotion,
-				Intensity: ep.Intensity,
-				Trigger:   ep.Trigger,
-			}
-			arcData.Points = append(arcData.Points, point)
+			characterEmotions[char.Name][ep.ChapterID] = ep.Intensity
+			chapterSet[ep.ChapterID] = true
+		}
+	}
 
-			// 收集情感类型
-			emotionTypesMap[ep.Emotion] = true
+	// 如果没有数据，返回空
+	if len(chapterSet) == 0 {
+		return data, nil
+	}
 
-			// 更新章节范围
-			if minChapter == 0 || ep.ChapterID < minChapter {
-				minChapter = ep.ChapterID
-			}
-			if ep.ChapterID > maxChapter {
-				maxChapter = ep.ChapterID
+	// 构建 xAxis（按章节顺序排列）
+	chapters := make([]int, 0, len(chapterSet))
+	for ch := range chapterSet {
+		chapters = append(chapters, ch)
+	}
+	sort.Ints(chapters)
+	for _, ch := range chapters {
+		data.XAxis = append(data.XAxis, fmt.Sprintf("第%d章", ch))
+	}
+
+	// 构建 series
+	for charName, emotions := range characterEmotions {
+		seriesData := []int{}
+		for _, ch := range chapters {
+			if intensity, ok := emotions[ch]; ok {
+				seriesData = append(seriesData, intensity)
+			} else {
+				seriesData = append(seriesData, 0) // 没有数据的章节填0
 			}
 		}
-
-		data.Data = append(data.Data, arcData)
-		data.Metadata.Characters = append(data.Metadata.Characters, char.Name)
-	}
-
-	// 构建情感类型列表
-	for emotion := range emotionTypesMap {
-		data.Metadata.EmotionTypes = append(data.Metadata.EmotionTypes, emotion)
-	}
-
-	// 设置章节范围
-	if minChapter > 0 && maxChapter > 0 {
-		data.Metadata.ChapterRange = []int{minChapter, maxChapter}
+		data.Series = append(data.Series, EmotionSeries{
+			Name: charName,
+			Data: seriesData,
+		})
 	}
 
 	return data, nil

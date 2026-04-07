@@ -267,6 +267,10 @@ const renderForceGraph = () => {
   const data = props.graphData
   const nodes = data.nodes || []
   const links = data.links || []
+  const categories = data.categories || []
+
+  // 从数据中提取实际使用的category类型
+  const categoryNames = categories.map(c => c.name)
 
   const option = {
     tooltip: {
@@ -284,7 +288,7 @@ const renderForceGraph = () => {
       }
     },
     legend: {
-      data: ['character', 'item', 'location', 'faction'],
+      data: categoryNames,
       top: 10,
       formatter: (name) => getNodeTypeName(name)
     },
@@ -308,12 +312,10 @@ const renderForceGraph = () => {
         lineStyle: l.lineStyle || { type: 'solid', color: '#aaa' },
         symbol: l.symbol || 'none'
       })),
-      categories: [
-        { name: 'character', itemStyle: { color: '#5470c6' } },
-        { name: 'item', itemStyle: { color: '#fac858' } },
-        { name: 'location', itemStyle: { color: '#91cc75' } },
-        { name: 'faction', itemStyle: { color: '#ee6666' } }
-      ],
+      categories: categories.map(c => ({
+        name: c.name,
+        itemStyle: { color: getNodeColor(c.name) }
+      })),
       roam: true,
       draggable: true,
       label: {
@@ -388,7 +390,11 @@ const getNodeTypeName = (type) => {
     'character': '人物',
     'item': '物品',
     'location': '地点',
-    'faction': '势力'
+    'faction': '势力',
+    'event': '事件',
+    'chapter': '章节',
+    'foreshadow': '伏笔',
+    'thread': '叙事线程'
   }
   return names[type] || type
 }
@@ -398,7 +404,11 @@ const getNodeColor = (type) => {
     'character': '#5470c6',
     'item': '#fac858',
     'location': '#91cc75',
-    'faction': '#ee6666'
+    'faction': '#ee6666',
+    'event': '#5470c6',
+    'chapter': '#91cc75',
+    'foreshadow': '#5470c6',
+    'thread': '#ee6666'
   }
   return colors[type] || '#91cc75'
 }
