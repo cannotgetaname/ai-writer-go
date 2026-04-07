@@ -103,6 +103,21 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 				bookGraph.GET("", handler.GetKnowledgeGraph)
 				bookGraph.GET("/echarts", handler.GetEChartsData)
 			}
+
+			// 世界状态审计
+			bookSync := books.Group("/:id/sync")
+			{
+				bookSync.POST("/extract-all", handler.SyncExtractAll)
+				bookSync.GET("/pending-graphs", handler.SyncGetPendingGraphs)
+				bookSync.POST("/apply-graphs", handler.SyncApplyGraphs)
+			}
+
+			// 分析
+			bookAnalysis := books.Group("/:id/analysis")
+			{
+				bookAnalysis.POST("/run", handler.AnalysisRun)
+				bookAnalysis.GET("/reports", handler.AnalysisGetReports)
+			}
 		}
 
 		// AI 写作（需要 LLM 配置）
