@@ -207,6 +207,9 @@ func (s *SQLiteVectorDB) Search(ctx context.Context, bookName string, queryEmbed
 	})
 
 	// 返回 topK
+	if topK <= 0 {
+		return []TextChunk{}, nil
+	}
 	if topK > len(scored) {
 		topK = len(scored)
 	}
@@ -303,10 +306,10 @@ func (s *SQLiteVectorDB) GetStatus(ctx context.Context, bookName string) (map[st
 	}
 
 	// 获取向量维度信息
-	var avgDimensions float64
+	var avgDimensions sql.NullFloat64
 	err = db.QueryRowContext(ctx, "SELECT AVG(dimensions) FROM vec_chunks").Scan(&avgDimensions)
-	if err != nil {
-		avgDimensions = 768 // 默认维度
+	if err != nil || !avgDimensions.Valid {
+		avgDimensions = sql.NullFloat64{Float64: 768, Valid: true} // 默认维度
 	}
 
 	return map[string]interface{}{
@@ -314,7 +317,7 @@ func (s *SQLiteVectorDB) GetStatus(ctx context.Context, bookName string) (map[st
 		"book_name":      bookName,
 		"chunk_count":    chunkCount,
 		"chapter_chunks": chapterChunks,
-		"dimensions":     int(avgDimensions),
+		"dimensions":     int(avgDimensions.Float64),
 		"backend":        "sqlite-pure-go",
 	}, nil
 }
