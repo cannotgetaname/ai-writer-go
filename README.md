@@ -22,7 +22,7 @@
 **Linux 安装：**
 ```bash
 # 下载并解压
-wget https://github.com/cannotgetaname/ai-writer-go/releases/download/v1.0.0/ai-writer-linux-amd64.tar.gz
+wget https://github.com/cannotgetaname/ai-writer-go/releases/download/v1.2.0/ai-writer-linux-amd64.tar.gz
 tar -xzvf ai-writer-linux-amd64.tar.gz
 
 # 配置
