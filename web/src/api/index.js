@@ -155,7 +155,10 @@ export const architectApi = {
 // 拆书分析
 export const analysisApi = {
   parse: (data) => api.post('/analysis/parse', data),
-  analyze: (data) => api.post('/analysis/analyze', data)
+  analyze: (data) => api.post('/analysis/analyze', data),
+  run: (bookId, chapterId, type = 'manual') =>
+    api.post(`/books/${bookId}/analysis/run?chapter_id=${chapterId}&type=${type}`),
+  getReports: (bookId) => api.get(`/books/${bookId}/analysis/reports`)
 }
 
 // 时间线和图谱
@@ -231,6 +234,13 @@ export const emotionApi = {
 export const infoBoundaryApi = {
   checkLeak: (bookId, chapterId) => api.post(`/books/${bookId}/info-boundary/check?chapter=${chapterId}`),
   extractInfo: (bookId, chapterId) => api.post(`/books/${bookId}/info-boundary/extract?chapter=${chapterId}`)
+}
+
+// 世界状态审计
+export const auditApi = {
+  extractAll: (bookId, chapterId) => api.post(`/books/${bookId}/sync/extract-all?chapter_id=${chapterId}`),
+  getPendingGraphs: (bookId) => api.get(`/books/${bookId}/sync/pending-graphs`),
+  applyGraphs: (bookId, acceptedIds) => api.post(`/books/${bookId}/sync/apply-graphs`, { accepted_ids: acceptedIds })
 }
 
 export default api
