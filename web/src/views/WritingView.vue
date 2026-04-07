@@ -23,6 +23,10 @@
           <el-icon><DocumentChecked /></el-icon>
           审稿
         </el-button>
+        <el-button type="info" @click="showWorldAuditDialog" :disabled="!currentChapter">
+          <el-icon><DataAnalysis /></el-icon>
+          审计世界状态
+        </el-button>
         <el-button @click="saveContent" :loading="saving">
           <el-icon><Save /></el-icon>
           保存
@@ -120,9 +124,12 @@
               >
                 <template #title>
                   <div class="issue-title">
-                    <el-tag type="info" size="small">段落{{ issue.paragraph_index }}</el-tag>
+                    <el-tag size="small" color="#e6f7ff" border-color="#91d5ff">段落{{ issue.paragraph_index }}</el-tag>
+                    <el-tag v-if="issue.related_paragraphs && issue.related_paragraphs.length > 0" size="small" color="#f9f0ff" border-color="#d3adf7">
+                      相关: {{ issue.related_paragraphs.join(', ') }}
+                    </el-tag>
                     <el-tag :type="getSeverityType(issue.severity)" size="small">{{ issue.severity }}</el-tag>
-                    <el-tag size="small">{{ issue.type }}</el-tag>
+                    <el-tag size="small" color="#fff7e6" border-color="#ffd591">{{ issue.type }}</el-tag>
                   </div>
                 </template>
                 <div class="issue-detail">
@@ -295,6 +302,14 @@
         <el-button type="primary" @click="saveEditParagraph">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 世界状态审计对话框 -->
+    <WorldAuditDialog
+      v-model="worldAuditDialogVisible"
+      :book-id="bookId"
+      :chapter-id="currentChapter?.id || 0"
+      @applied="loadForeshadows"
+    />
   </div>
 </template>
 
@@ -303,6 +318,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { chapterApi, aiApi, foreshadowApi } from '@/api'
+import WorldAuditDialog from '@/components/WorldAuditDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -358,6 +374,9 @@ const paragraphs = ref([])
 const editParagraphVisible = ref(false)
 const editParagraphContent = ref('')
 const editParagraphIndex = ref(-1)
+
+// 世界状态审计对话框
+const worldAuditDialogVisible = ref(false)
 
 const goBack = () => {
   router.push(`/books/${bookId.value}`)
@@ -515,6 +534,7 @@ const getScoreColor = (score) => {
 const getSeverityType = (severity) => {
   if (severity === '严重' || severity === '高') return 'danger'
   if (severity === '中等' || severity === '中') return 'warning'
+  if (severity === '轻微') return 'success'
   return 'info'
 }
 
@@ -643,6 +663,15 @@ const saveParagraphs = async () => {
   await saveContent()
   paragraphDialogVisible.value = false
   ElMessage.success('段落已更新')
+}
+
+// 世界状态审计
+const showWorldAuditDialog = () => {
+  if (!currentChapter.value) {
+    ElMessage.warning('请先选择章节')
+    return
+  }
+  worldAuditDialogVisible.value = true
 }
 
 const loadForeshadows = async () => {
