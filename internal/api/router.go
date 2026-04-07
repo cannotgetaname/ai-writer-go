@@ -125,6 +125,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		{
 			ai.POST("/generate", handler.AIGenerate)
 			ai.POST("/generate/stream", handler.AIGenerateStream)
+			ai.GET("/review", handler.AIReview)
 			ai.POST("/review", handler.AIReview)
 			ai.POST("/audit", handler.AIAudit)
 			ai.POST("/rewrite", handler.AIRewrite)
