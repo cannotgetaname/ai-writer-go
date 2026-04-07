@@ -41,11 +41,7 @@ var serverCmd = &cobra.Command{
 		fmt.Printf("启动 AI Writer Web 服务...\n")
 		fmt.Printf("访问地址: http://%s:%d\n", serverHost, serverPort)
 
-		// 初始化存储
-		initStore()
-		initStoreForAPI()
-
-		// 启动 Gin 服务器
+		// 启动 Gin 服务器 (存储已在 PersistentPreRun 中初始化)
 		router := api.SetupRouter(cfg)
 		router.Run(fmt.Sprintf("%s:%d", serverHost, serverPort))
 	},
@@ -86,11 +82,6 @@ func init() {
 	serverCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "后台运行")
 
 	stopCmd.Flags().BoolP("force", "f", false, "强制停止")
-}
-
-// initStoreForAPI initializes store for API handlers
-func initStoreForAPI() {
-	// Store is initialized in router.go
 }
 
 // startDaemon 后台启动服务
