@@ -104,7 +104,11 @@ func (s *SyncService) buildExtractionPrompt(content string, characters []*model.
 	if len(characters) > 0 {
 		prompt.WriteString("【现有人物】\n")
 		for _, char := range characters {
-			prompt.WriteString(fmt.Sprintf("- %s: 状态=%s, 位置=%s\n", char.Name, char.Status, ""))
+			loc := char.Faction
+			if char.Sect != "" {
+				loc = char.Sect
+			}
+			prompt.WriteString(fmt.Sprintf("- %s: 状态=%s, 势力=%s\n", char.Name, char.Status, loc))
 		}
 		prompt.WriteString("\n")
 	}
@@ -113,7 +117,7 @@ func (s *SyncService) buildExtractionPrompt(content string, characters []*model.
 	if len(items) > 0 {
 		prompt.WriteString("【现有物品】\n")
 		for _, item := range items {
-			prompt.WriteString(fmt.Sprintf("- %s: 持有者=%s\n", item.Name, item.Owner))
+			prompt.WriteString(fmt.Sprintf("- %s: 持有者=%s, 势力=%s\n", item.Name, item.Owner, item.Faction))
 		}
 		prompt.WriteString("\n")
 	}
@@ -122,29 +126,20 @@ func (s *SyncService) buildExtractionPrompt(content string, characters []*model.
 	if len(locations) > 0 {
 		prompt.WriteString("【现有地点】\n")
 		for _, loc := range locations {
-			prompt.WriteString(fmt.Sprintf("- %s\n", loc.Name))
+			prompt.WriteString(fmt.Sprintf("- %s: 势力=%s\n", loc.Name, loc.Faction))
 		}
 		prompt.WriteString("\n")
 	}
 
-	prompt.WriteString(`请提取以下类型的状态变更，用JSON格式输出：
+	// 使用与 AuditorSystem 提示词一致的 JSON 结构
+	prompt.WriteString(`请严格按以下 JSON 结构输出（不要使用 Markdown 代码块）：
 {
-  "character_changes": [
-    {"name": "角色名", "field": "status/location/emotion", "old": "旧值", "new": "新值", "reason": "原因"}
-  ],
-  "item_changes": [
-    {"name": "物品名", "old_owner": "旧持有者", "new_owner": "新持有者", "reason": "原因"}
-  ],
-  "new_characters": [
-    {"name": "新角色名", "role": "角色类型", "bio": "简介"}
-  ],
-  "new_items": [
-    {"name": "新物品名", "type": "类型", "owner": "持有者"}
-  ],
-  "new_locations": [
-    {"name": "新地点名", "type": "类型"}
-  ],
-  "time_progression": "时间推进描述"
+  "char_updates": [{"name": "名字", "field": "属性名", "new_value": "新值"}],
+  "item_updates": [{"name": "物品名", "field": "属性名", "new_value": "新值"}],
+  "new_chars": [{"name": "名字", "gender": "性别", "role": "角色类型", "status": "状态", "bio": "简介"}],
+  "new_items": [{"name": "物品名", "type": "类型", "owner": "持有者", "desc": "描述"}],
+  "new_locs": [{"name": "地名", "faction": "所属势力", "desc": "描述"}],
+  "relation_updates": [{"source": "主角", "target": "配角", "type": "关系类型"}]
 }
 
 只提取明确发生的变化，不要推测。如果没有变化，返回空数组。`)
@@ -152,40 +147,45 @@ func (s *SyncService) buildExtractionPrompt(content string, characters []*model.
 	return prompt.String()
 }
 
-// parseExtractionResult 解析提取结果
+// parseExtractionResult 解析提取结果（与 AuditorSystem 提示词格式一致）
 func (s *SyncService) parseExtractionResult(result string, chapterID int) []StateChange {
 	var changes []StateChange
 
-	// 解析 JSON
+	// 解析 JSON（使用提示词定义的键名）
 	var data struct {
-		CharacterChanges []struct {
+		CharUpdates []struct {
+			Name     string `json:"name"`
+			Field    string `json:"field"`
+			NewValue string `json:"new_value"`
+		} `json:"char_updates"`
+		ItemUpdates []struct {
+			Name     string `json:"name"`
+			Field    string `json:"field"`
+			NewValue string `json:"new_value"`
+		} `json:"item_updates"`
+		NewChars []struct {
 			Name   string `json:"name"`
-			Field  string `json:"field"`
-			Old    string `json:"old"`
-			New    string `json:"new"`
-			Reason string `json:"reason"`
-		} `json:"character_changes"`
-		ItemChanges []struct {
-			Name      string `json:"name"`
-			OldOwner  string `json:"old_owner"`
-			NewOwner  string `json:"new_owner"`
-			Reason    string `json:"reason"`
-		} `json:"item_changes"`
-		NewCharacters []struct {
-			Name string `json:"name"`
-			Role string `json:"role"`
-			Bio  string `json:"bio"`
-		} `json:"new_characters"`
+			Gender string `json:"gender"`
+			Role   string `json:"role"`
+			Status string `json:"status"`
+			Bio    string `json:"bio"`
+		} `json:"new_chars"`
 		NewItems []struct {
 			Name  string `json:"name"`
 			Type  string `json:"type"`
 			Owner string `json:"owner"`
+			Desc  string `json:"desc"`
 		} `json:"new_items"`
-		NewLocations []struct {
-			Name string `json:"name"`
-			Type string `json:"type"`
-		} `json:"new_locations"`
-		TimeProgression string `json:"time_progression"`
+		NewLocs []struct {
+			Name    string `json:"name"`
+			Faction string `json:"faction"`
+			Desc    string `json:"desc"`
+		} `json:"new_locs"`
+		RelationUpdates []struct {
+			Source string `json:"source"`
+			Target string `json:"target"`
+			Type   string `json:"type"`
+		} `json:"relation_updates"`
 	}
 
 	if err := parseJSON(result, &data); err != nil {
@@ -193,44 +193,47 @@ func (s *SyncService) parseExtractionResult(result string, chapterID int) []Stat
 	}
 
 	// 转换人物状态变更
-	for _, cc := range data.CharacterChanges {
+	for _, cu := range data.CharUpdates {
 		changes = append(changes, StateChange{
 			ID:        generateID(),
 			Type:      "character_status",
-			Entity:    cc.Name,
-			Field:     cc.Field,
-			OldValue:  cc.Old,
-			NewValue:  cc.New,
-			Reason:    cc.Reason,
+			Entity:    cu.Name,
+			Field:     cu.Field,
+			NewValue:  cu.NewValue,
+			Reason:    "从章节内容提取",
 			ChapterID: chapterID,
 		})
 	}
 
-	// 转换物品归属变更
-	for _, ic := range data.ItemChanges {
+	// 转换物品属性变更
+	for _, iu := range data.ItemUpdates {
 		changes = append(changes, StateChange{
 			ID:        generateID(),
-			Type:      "item_owner",
-			Entity:    ic.Name,
-			Field:     "owner",
-			OldValue:  ic.OldOwner,
-			NewValue:  ic.NewOwner,
-			Reason:    ic.Reason,
+			Type:      "item_update",
+			Entity:    iu.Name,
+			Field:     iu.Field,
+			NewValue:  iu.NewValue,
+			Reason:    "从章节内容提取",
 			ChapterID: chapterID,
 		})
 	}
 
 	// 转换新人物
-	for _, nc := range data.NewCharacters {
+	for _, nc := range data.NewChars {
 		changes = append(changes, StateChange{
 			ID:        generateID(),
 			Type:      "new_character",
 			Entity:    nc.Name,
-			Field:     "role",
-			NewValue:  nc.Role,
-			Reason:    nc.Bio,
+			Field:     "bio",
+			NewValue:  nc.Bio,
+			Reason:    fmt.Sprintf("性别: %s, 角色: %s, 状态: %s", nc.Gender, nc.Role, nc.Status),
 			ChapterID: chapterID,
+			// 附加信息存储在扩展字段中
 		})
+		// 额外记录 gender, role, status 信息
+		if nc.Gender != "" {
+			changes[len(changes)-1].OldValue = nc.Gender // 暂用 OldValue 存 gender
+		}
 	}
 
 	// 转换新物品
@@ -239,32 +242,35 @@ func (s *SyncService) parseExtractionResult(result string, chapterID int) []Stat
 			ID:        generateID(),
 			Type:      "new_item",
 			Entity:    ni.Name,
-			Field:     "type",
-			NewValue:  ni.Type,
-			Reason:    "持有者: " + ni.Owner,
+			Field:     "desc",
+			NewValue:  ni.Desc,
+			Reason:    fmt.Sprintf("类型: %s, 持有者: %s", ni.Type, ni.Owner),
 			ChapterID: chapterID,
 		})
 	}
 
 	// 转换新地点
-	for _, nl := range data.NewLocations {
+	for _, nl := range data.NewLocs {
 		changes = append(changes, StateChange{
 			ID:        generateID(),
 			Type:      "new_location",
 			Entity:    nl.Name,
-			Field:     "type",
-			NewValue:  nl.Type,
+			Field:     "desc",
+			NewValue:  nl.Desc,
+			Reason:    fmt.Sprintf("势力: %s", nl.Faction),
 			ChapterID: chapterID,
 		})
 	}
 
-	// 时间推进
-	if data.TimeProgression != "" {
+	// 转换关系变更
+	for _, ru := range data.RelationUpdates {
 		changes = append(changes, StateChange{
 			ID:        generateID(),
-			Type:      "time_progression",
-			Field:     "time",
-			NewValue:  data.TimeProgression,
+			Type:      "relation_update",
+			Entity:    ru.Source,
+			Field:     "relation",
+			NewValue:  ru.Type,
+			Reason:    ru.Target,
 			ChapterID: chapterID,
 		})
 	}
@@ -277,7 +283,7 @@ func (s *SyncService) ApplyChange(bookName string, change *StateChange) error {
 	switch change.Type {
 	case "character_status":
 		return s.applyCharacterChange(bookName, change)
-	case "item_owner":
+	case "item_update":
 		return s.applyItemChange(bookName, change)
 	case "new_character":
 		return s.applyNewCharacter(bookName, change)
@@ -285,8 +291,8 @@ func (s *SyncService) ApplyChange(bookName string, change *StateChange) error {
 		return s.applyNewItem(bookName, change)
 	case "new_location":
 		return s.applyNewLocation(bookName, change)
-	case "time_progression":
-		return s.applyTimeProgression(bookName, change)
+	case "relation_update":
+		return s.applyRelationChange(bookName, change)
 	}
 	return nil
 }
@@ -301,9 +307,28 @@ func (s *SyncService) applyCharacterChange(bookName string, change *StateChange)
 		if char.Name == change.Entity {
 			switch change.Field {
 			case "status":
+				// 记录状态变更历史
+				char.StatusHistory = append(char.StatusHistory, model.StatusChange{
+					ChapterID: change.ChapterID,
+					Field:     "status",
+					OldValue:  char.Status,
+					NewValue:  change.NewValue,
+					Reason:    change.Reason,
+				})
 				char.Status = change.NewValue
-			case "location":
-				// 可以添加位置字段到 Character
+			case "faction":
+				// 记录势力变更历史
+				char.FactionHistory = append(char.FactionHistory, model.FactionChange{
+					ChapterID:  change.ChapterID,
+					OldFaction: char.Faction,
+					NewFaction: change.NewValue,
+					Reason:     change.Reason,
+				})
+				char.Faction = change.NewValue
+			case "cultivation":
+				char.Cultivation = change.NewValue
+			case "position":
+				char.Position = change.NewValue
 			case "emotion":
 				char.EmotionalArc = append(char.EmotionalArc, model.EmotionPoint{
 					ChapterID: change.ChapterID,
@@ -326,7 +351,26 @@ func (s *SyncService) applyItemChange(bookName string, change *StateChange) erro
 
 	for _, item := range items {
 		if item.Name == change.Entity {
-			item.Owner = change.NewValue
+			switch change.Field {
+			case "owner":
+				// 记录归属变更历史
+				item.OwnerHistory = append(item.OwnerHistory, model.ItemOwnerChange{
+					ChapterID: change.ChapterID,
+					OldOwner:  item.Owner,
+					NewOwner:  change.NewValue,
+					Action:    "变更",
+					Reason:    change.Reason,
+				})
+				item.Owner = change.NewValue
+			case "faction":
+				item.Faction = change.NewValue
+			case "location":
+				item.Location = change.NewValue
+			case "rank":
+				item.Rank = change.NewValue
+			case "abilities":
+				item.Abilities = change.NewValue
+			}
 			break
 		}
 	}
@@ -347,14 +391,44 @@ func (s *SyncService) applyNewCharacter(bookName string, change *StateChange) er
 		}
 	}
 
+	// 解析附加信息（Reason 格式: "性别: x, 角色: y, 状态: z"）
+	gender := ""
+	role := "路人"
+	status := "存活"
+	bio := change.NewValue
+
+	// OldValue 暂存 gender
+	if change.OldValue != "" {
+		gender = change.OldValue
+	}
+
+	// 从 Reason 解析 role 和 status
+	if strings.Contains(change.Reason, "角色:") {
+		parts := strings.Split(change.Reason, ", ")
+		for _, part := range parts {
+			if strings.HasPrefix(part, "角色:") {
+				role = strings.TrimPrefix(part, "角色: ")
+			}
+			if strings.HasPrefix(part, "状态:") {
+				status = strings.TrimPrefix(part, "状态: ")
+			}
+			if strings.HasPrefix(part, "性别:") {
+				gender = strings.TrimPrefix(part, "性别: ")
+			}
+		}
+	}
+
+	// 记录出场章节
 	newChar := &model.Character{
-		ID:        generateID(),
-		BookID:    bookName,
-		Name:      change.Entity,
-		Role:      change.NewValue,
-		Bio:       change.Reason,
-		Status:    "存活",
-		Relations: []model.Relation{},
+		ID:            generateID(),
+		BookID:        bookName,
+		Name:          change.Entity,
+		Gender:        gender,
+		Role:          role,
+		Status:        status,
+		Bio:           bio,
+		Relations:     []model.Relation{},
+		AppearChapters: []int{change.ChapterID},
 	}
 
 	characters = append(characters, newChar)
@@ -374,12 +448,43 @@ func (s *SyncService) applyNewItem(bookName string, change *StateChange) error {
 		}
 	}
 
+	// 解析附加信息（Reason 格式: "类型: x, 持有者: y"）
+	itemType := "未知"
+	owner := ""
+	desc := change.NewValue
+
+	if strings.Contains(change.Reason, "类型:") {
+		parts := strings.Split(change.Reason, ", ")
+		for _, part := range parts {
+			if strings.HasPrefix(part, "类型:") {
+				itemType = strings.TrimPrefix(part, "类型: ")
+			}
+			if strings.HasPrefix(part, "持有者:") {
+				owner = strings.TrimPrefix(part, "持有者: ")
+			}
+		}
+	}
+
 	newItem := &model.Item{
-		ID:          generateID(),
-		BookID:      bookName,
-		Name:        change.Entity,
-		Type:        change.NewValue,
-		Description: change.Reason,
+		ID:            generateID(),
+		BookID:        bookName,
+		Name:          change.Entity,
+		Type:          itemType,
+		Owner:         owner,
+		Description:   desc,
+		AppearChapters: []int{change.ChapterID},
+	}
+
+	if owner != "" {
+		newItem.OwnerHistory = []model.ItemOwnerChange{
+			{
+				ChapterID: change.ChapterID,
+				OldOwner:  "",
+				NewOwner:  owner,
+				Action:    "获得",
+				Reason:    "新物品首次出现",
+			},
+		}
 	}
 
 	items = append(items, newItem)
@@ -399,29 +504,73 @@ func (s *SyncService) applyNewLocation(bookName string, change *StateChange) err
 		}
 	}
 
+	// 解析附加信息（Reason 格式: "势力: x"）
+	faction := ""
+	desc := change.NewValue
+
+	if strings.Contains(change.Reason, "势力:") {
+		faction = strings.TrimPrefix(change.Reason, "势力: ")
+	}
+
 	newLoc := &model.Location{
 		ID:          generateID(),
 		BookID:      bookName,
 		Name:        change.Entity,
-		Description: change.NewValue,
+		Description: desc,
+		Faction:     faction,
 	}
 
 	locations = append(locations, newLoc)
 	return s.store.SaveLocations(bookName, locations)
 }
 
-func (s *SyncService) applyTimeProgression(bookName string, change *StateChange) error {
-	chapters, err := s.store.LoadChapters(bookName)
+func (s *SyncService) applyRelationChange(bookName string, change *StateChange) error {
+	characters, err := s.store.LoadCharacters(bookName)
 	if err != nil {
 		return err
 	}
 
-	for _, ch := range chapters {
-		if ch.ID == change.ChapterID {
-			ch.TimeInfo.Label = change.NewValue
+	// 找到源人物，添加关系
+	for _, char := range characters {
+		if char.Name == change.Entity {
+			targetName := change.Reason // Reason 存储 target 名字
+			relType := change.NewValue  // NewValue 存储 relation type
+
+			// 检查是否已有此关系
+			existing := false
+			for _, rel := range char.Relations {
+				if rel.TargetName == targetName {
+					// 更新现有关系
+					rel.History = append(rel.History, model.RelationChange{
+						ChapterID: change.ChapterID,
+						Change:    0,
+						Reason:    "关系类型变更为: " + relType,
+					})
+					rel.Type = relType
+					existing = true
+					break
+				}
+			}
+
+			if !existing {
+				// 添加新关系
+				char.Relations = append(char.Relations, model.Relation{
+					TargetID:   "",
+					TargetName: targetName,
+					Type:       relType,
+					Value:      0,
+					History: []model.RelationChange{
+						{
+							ChapterID: change.ChapterID,
+							Change:    0,
+							Reason:    "新建立关系",
+						},
+					},
+				})
+			}
 			break
 		}
 	}
 
-	return s.store.SaveChapters(bookName, chapters)
+	return s.store.SaveCharacters(bookName, characters)
 }

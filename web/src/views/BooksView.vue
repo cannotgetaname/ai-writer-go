@@ -42,6 +42,7 @@
                 <el-icon><Tools /></el-icon>
                 设定
               </el-button>
+              <el-button size="small" @click.stop="showEditDialog(book)">编辑</el-button>
               <el-button size="small" type="danger" @click.stop="deleteBook(book.id)">
                 <el-icon><Delete /></el-icon>
               </el-button>
@@ -63,6 +64,19 @@
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="createBook">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑对话框 -->
+    <el-dialog v-model="editDialogVisible" title="编辑书籍" width="400px">
+      <el-form :model="editBook" label-width="80px">
+        <el-form-item label="书籍名称">
+          <el-input v-model="editBook.name" placeholder="请输入新书名" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="renameBook">保存</el-button>
       </template>
     </el-dialog>
 
@@ -115,6 +129,9 @@ const books = ref([])
 const createDialogVisible = ref(false)
 const newBook = ref({ name: '' })
 
+const editDialogVisible = ref(false)
+const editBook = ref({ id: '', name: '' })
+
 const initDialogVisible = ref(false)
 const initLoading = ref(false)
 const initProgress = ref('')
@@ -158,6 +175,26 @@ const createBook = async () => {
     loadBooks()
   } catch (error) {
     ElMessage.error('创建失败: ' + error.message)
+  }
+}
+
+const showEditDialog = (book) => {
+  editBook.value = { id: book.id, name: book.name || book.id }
+  editDialogVisible.value = true
+}
+
+const renameBook = async () => {
+  if (!editBook.value.name) {
+    ElMessage.warning('请输入书籍名称')
+    return
+  }
+  try {
+    await bookApi.update(editBook.value.id, { name: editBook.value.name })
+    ElMessage.success('书名修改成功')
+    editDialogVisible.value = false
+    loadBooks()
+  } catch (error) {
+    ElMessage.error('修改失败: ' + (error.response?.data?.error || error.message))
   }
 }
 

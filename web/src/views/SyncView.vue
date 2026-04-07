@@ -221,10 +221,11 @@ const rejectAll = async () => {
 const getChangeTypeTag = (type) => {
   const typeMap = {
     'character_status': 'warning',
-    'item_owner': 'info',
+    'item_update': 'info',
     'new_character': 'success',
     'new_item': 'success',
     'new_location': 'success',
+    'relation_update': 'primary',
     'time_progression': ''
   }
   return typeMap[type] || ''

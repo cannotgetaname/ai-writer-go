@@ -771,13 +771,14 @@ func (s *ReviewService) generateFullSummary(result *FullReviewResult) string {
 
 // ParagraphReviewIssue 段落审稿问题
 type ParagraphReviewIssue struct {
-	ParagraphID    string `json:"paragraph_id"`
-	ParagraphIndex int    `json:"paragraph_index"`
-	Type           string `json:"type"`
-	Severity       string `json:"severity"`
-	Description    string `json:"description"`
-	Suggestion     string `json:"suggestion"`
-	OriginalText   string `json:"original_text"`
+	ParagraphID      string   `json:"paragraph_id"`       // 主要问题段落 ID
+	ParagraphIndex   int      `json:"paragraph_index"`    // 主要问题段落索引
+	RelatedParagraphs []int   `json:"related_paragraphs"` // 相关的其他段落索引（如有）
+	Type             string   `json:"type"`
+	Severity         string   `json:"severity"`
+	Description      string   `json:"description"`
+	Suggestion       string   `json:"suggestion"`
+	OriginalText     string   `json:"original_text"`
 }
 
 // ParagraphReviewResult 段落审稿结果
@@ -822,12 +823,12 @@ func (s *ReviewService) ReviewChapterByParagraph(ctx context.Context, bookName s
 func (s *ReviewService) buildParagraphReviewPrompt(paragraphs *model.ChapterParagraphs, characters []*model.Character) string {
 	var prompt strings.Builder
 
-	prompt.WriteString("请对以下章节分段落进行审稿。每个段落都有唯一ID，请在指出问题时标注段落ID。\n\n")
+	prompt.WriteString("你是一位资深网文编辑，请对以下章节进行专业审稿。每个段落都有序号。\n\n")
 
 	prompt.WriteString("【段落列表】\n")
 	prompt.WriteString("────────────────────────────────\n")
 	for i, p := range paragraphs.Paragraphs {
-		prompt.WriteString(fmt.Sprintf("[段落%d ID: %s]\n", i+1, p.ID))
+		prompt.WriteString(fmt.Sprintf("[段落%d]\n", i+1))
 		prompt.WriteString(p.Text)
 		prompt.WriteString("\n\n")
 	}
@@ -841,28 +842,42 @@ func (s *ReviewService) buildParagraphReviewPrompt(paragraphs *model.ChapterPara
 		prompt.WriteString("\n")
 	}
 
-	prompt.WriteString(`请从以下维度审查每个段落：
-1. 【人设一致性】人物言行是否符合其性格和身份？
-2. 【剧情逻辑】是否有前后矛盾或不合理的转折？
-3. 【爽点节奏】是否过于拖沓？是否有期待感？
-4. 【文笔表达】描写是否生动？对话是否自然？
+	prompt.WriteString(`【审稿维度】
+1. 人设一致性：人物言行是否符合其性格和身份？是否有OOC（人物崩坏）？
+2. 剧情逻辑：是否有前后矛盾？因果关系是否合理？是否有逻辑漏洞？
+3. 节奏把控：是否拖沓？是否有期待感？冲突是否足够？
+4. 文笔表达：描写是否生动？对话是否自然？是否有重复表达？
+
+【问题示例】
+- 好的问题：段落3中主角突然变得懦弱，与之前"性格刚烈"的设定矛盾
+- 好的问题：段落5和段落8对同一事件的描述不一致，前面说"雨夜"，后面变成"晴天"
+- 坏的问题：这段写得不好（太模糊，不具体）
+- 坏的问题：建议修改（没有说明问题是什么）
 
 请严格按以下 JSON 格式输出（不要使用 Markdown 代码块）：
 {
   "overall_score": 85,
   "paragraph_issues": [
     {
-      "paragraph_id": "段落ID",
-      "type": "问题类型",
-      "severity": "严重程度",
-      "description": "问题描述",
-      "suggestion": "修改建议"
+      "paragraph_index": 3,
+      "related_indices": [5],
+      "type": "人设",
+      "severity": "中等",
+      "description": "具体描述问题：段落3中xxx的言行与设定矛盾，因为...",
+      "suggestion": "具体修改建议：建议将xxx改为..."
     }
   ],
   "suggestions": ["整体建议1", "整体建议2"]
 }
 
-注意：只输出有问题的段落，没有问题的段落不要列出。`)
+【重要规则】
+1. paragraph_index：问题所在的【主要段落序号】（第3段就填3）
+2. related_indices：相关段落序号数组（如段落3和5有矛盾，填[5]）
+3. 只输出【真正有问题】的段落，优秀的段落不要列出
+4. description必须【具体】：指明是哪句话、哪个行为有问题，为什么是问题
+5. suggestion必须【可操作】：给出具体的修改方向或示例
+6. severity从严：只有严重影响阅读体验才标"严重"，一般问题标"中等"，小瑕疵标"轻微"
+7. 没有问题时返回：{"overall_score": 85, "paragraph_issues": [], "suggestions": []}`)
 
 	return prompt.String()
 }
@@ -875,27 +890,16 @@ func (s *ReviewService) parseParagraphReviewResult(result string, paragraphs *mo
 		Suggestions:     []string{},
 	}
 
-	// 构建段落 ID 到索引和文本的映射
-	paragraphMap := make(map[string]struct {
-		index int
-		text  string
-	})
-	for i, p := range paragraphs.Paragraphs {
-		paragraphMap[p.ID] = struct {
-			index int
-			text  string
-		}{index: i + 1, text: p.Text}
-	}
-
 	// 尝试解析 JSON
 	var data struct {
 		OverallScore    int `json:"overall_score"`
 		ParagraphIssues []struct {
-			ParagraphID string `json:"paragraph_id"`
-			Type        string `json:"type"`
-			Severity    string `json:"severity"`
-			Description string `json:"description"`
-			Suggestion  string `json:"suggestion"`
+			ParagraphIndex   int    `json:"paragraph_index"`
+			RelatedIndices   []int  `json:"related_indices"`
+			Type             string `json:"type"`
+			Severity         string `json:"severity"`
+			Description      string `json:"description"`
+			Suggestion       string `json:"suggestion"`
 		} `json:"paragraph_issues"`
 		Suggestions []string `json:"suggestions"`
 	}
@@ -909,35 +913,28 @@ func (s *ReviewService) parseParagraphReviewResult(result string, paragraphs *mo
 
 	// 处理段落问题
 	for _, issue := range data.ParagraphIssues {
-		info, exists := paragraphMap[issue.ParagraphID]
-		if !exists {
-			// 尝试截断 ID 匹配
-			for pid, pinfo := range paragraphMap {
-				if len(pid) >= 8 && pid[:8] == issue.ParagraphID {
-					issue.ParagraphID = pid
-					info = pinfo
-					exists = true
-					break
-				}
-			}
+		// 段落索引从1开始
+		idx := issue.ParagraphIndex - 1
+		if idx < 0 || idx >= len(paragraphs.Paragraphs) {
+			continue
 		}
 
-		if exists {
-			originalText := info.text
-			if len(originalText) > 100 {
-				originalText = originalText[:100] + "..."
-			}
-
-			review.ParagraphIssues = append(review.ParagraphIssues, ParagraphReviewIssue{
-				ParagraphID:    issue.ParagraphID,
-				ParagraphIndex: info.index,
-				Type:           issue.Type,
-				Severity:       issue.Severity,
-				Description:    issue.Description,
-				Suggestion:     issue.Suggestion,
-				OriginalText:   originalText,
-			})
+		p := paragraphs.Paragraphs[idx]
+		originalText := p.Text
+		if len(originalText) > 100 {
+			originalText = originalText[:100] + "..."
 		}
+
+		review.ParagraphIssues = append(review.ParagraphIssues, ParagraphReviewIssue{
+			ParagraphID:       p.ID,
+			ParagraphIndex:    issue.ParagraphIndex,
+			RelatedParagraphs: issue.RelatedIndices,
+			Type:              issue.Type,
+			Severity:          issue.Severity,
+			Description:       issue.Description,
+			Suggestion:        issue.Suggestion,
+			OriginalText:      originalText,
+		})
 	}
 
 	return review

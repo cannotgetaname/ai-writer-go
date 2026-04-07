@@ -5,7 +5,9 @@
         <el-icon><ArrowLeft /></el-icon>
         返回
       </el-button>
-      <h2>{{ book.name || bookId }}</h2>
+      <h2>{{ book.name || bookId }}
+        <el-button size="small" @click="showEditDialog">编辑</el-button>
+      </h2>
       <div class="header-actions">
         <el-button @click="goToWrite">
           <el-icon><Edit /></el-icon>
@@ -131,12 +133,26 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 编辑对话框 -->
+    <el-dialog v-model="editDialogVisible" title="编辑书籍" width="400px">
+      <el-form :model="editName" label-width="80px">
+        <el-form-item label="书籍名称">
+          <el-input v-model="editName" placeholder="请输入新书名" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="renameBook">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { bookApi, exportApi } from '@/api'
 
 const router = useRouter()
@@ -144,6 +160,9 @@ const route = useRoute()
 const bookId = computed(() => route.params.id)
 
 const book = ref({})
+const editDialogVisible = ref(false)
+const editName = ref('')
+
 const topCharacters = computed(() => {
   const chars = book.value.characters || []
   return chars.filter(c => c.role === '主角' || c.role === '配角').slice(0, 5)
@@ -151,6 +170,26 @@ const topCharacters = computed(() => {
 
 const goBack = () => {
   router.push('/books')
+}
+
+const showEditDialog = () => {
+  editName.value = book.value.name || bookId.value
+  editDialogVisible.value = true
+}
+
+const renameBook = async () => {
+  if (!editName.value) {
+    ElMessage.warning('请输入书籍名称')
+    return
+  }
+  try {
+    await bookApi.update(bookId.value, { name: editName.value })
+    ElMessage.success('书名修改成功')
+    editDialogVisible.value = false
+    router.push(`/books/${editName.value}`)
+  } catch (error) {
+    ElMessage.error('修改失败: ' + (error.response?.data?.error || error.message))
+  }
 }
 
 const goToWrite = () => {
