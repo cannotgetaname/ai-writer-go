@@ -34,6 +34,13 @@ config.yaml
 data/
 *.log
 .ai-writer.pid
+.tei.pid
+
+# Vector database
+*.db
+
+# Release builds
+release/
 
 # Node modules
 node_modules/

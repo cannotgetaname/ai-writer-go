@@ -46,11 +46,25 @@ vim config.yaml  # 填入你的 API Key
 git clone https://github.com/cannotgetaname/ai-writer-go.git
 cd ai-writer-go
 
+# 构建前端
+cd web && npm install && npm run build && cd ..
+
 # 编译后端
 go build -o ai-writer .
 
-# 构建前端
-cd web && npm install && npm run build
+# 运行
+./ai-writer server
+```
+
+### 构建 Release 包
+
+```bash
+# 运行构建脚本
+./scripts/build.sh
+
+# 输出在 release/ 目录
+cd release
+./start.sh
 ```
 
 ## 功能特性
@@ -121,6 +135,7 @@ ai-writer tool title --genre 玄幻
 - **知识图谱**: 可视化展示人物、物品、地点、势力之间的关系网络
 - **世界状态审计**: AI 自动提取图谱数据，集中审核确认
 - **系统配置**: 模型设置、提示词配置、费用统计
+- **向量检索**: 百万字级别相似内容检索，支持多种 Embedding 服务
 
 #### 知识图谱
 
@@ -215,6 +230,9 @@ data/projects/{book_name}/
 ├── threads.json         # 叙事线程
 └── chapters/
     └── 1.json           # 章节内容
+
+data/vector_db/          # 向量数据库（sqlite-vec）
+└── {book_name}.db       # 书籍向量索引
 ```
 
 ## 配置说明
@@ -235,9 +253,74 @@ llm:
     architect: 1.0
     reviewer: 0.5
 
+embedding:
+  provider: tei                # tei / ollama / openai / deepseek / custom
+  model: bge-base-zh-v1.5      # TEI 模型名称
+  base_url: http://127.0.0.1:8081
+  api_key: ""
+
+vectordb:
+  provider: sqlite-vec         # sqlite-vec / custom
+
+vector_store:
+  chunk_size: 500
+  overlap: 100
+
 server:
   port: "8081"
   data_dir: "data"
+```
+
+## 向量检索功能
+
+AI Writer 支持百万字级别的向量检索，帮助快速查找相似内容。
+
+### Embedding 服务配置
+
+| Provider | 说明 | 适用场景 |
+|----------|------|----------|
+| `tei` | Docker 运行 TEI（推荐） | 本地部署，高性能 |
+| `ollama` | 本地 Ollama | 已有 Ollama 环境 |
+| `deepseek` | DeepSeek API | 云端服务，无需本地部署 |
+| `openai` | OpenAI API | 云端服务 |
+| `custom` | 自定义 API | 兼容 OpenAI 格式的服务 |
+
+### 启动 TEI 服务（推荐）
+
+```bash
+# 使用 Docker 启动 TEI
+docker run -d --name tei \
+  --gpus all \
+  -p 8081:80 \
+  -v $HOME/.cache/huggingface:/data \
+  ghcr.io/huggingface/text-embeddings-inference:latest \
+  --model-id BAAI/bge-base-zh-v1.5
+```
+
+### 使用 Ollama
+
+```bash
+# 安装 embedding 模型
+ollama pull embeddinggemma
+
+# 修改 config.yaml
+embedding:
+  provider: ollama
+  base_url: http://localhost:11434
+```
+
+### 向量检索 API
+
+```bash
+# 索引整本书
+curl -X POST http://localhost:8081/api/vector/index \
+  -H "Content-Type: application/json" \
+  -d '{"book_name": "my_book"}'
+
+# 搜索相似内容
+curl -X POST http://localhost:8081/api/vector/search \
+  -H "Content-Type: application/json" \
+  -d '{"book_name": "my_book", "query": "主角的武器", "top_k": 5}'
 ```
 
 ## License
