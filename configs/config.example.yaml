@@ -35,10 +35,14 @@ vector_store:
   overlap: 100
 
 embedding:
-  provider: "ollama"
-  model: "embeddinggemma:latest"
-  base_url: "http://localhost:11434"
-  api_key: ""  # 仅 OpenAI 需要
+  provider: "tei"                    # tei / ollama / openai / deepseek / custom
+  model: "bge-base-zh-v1.5"          # TEI 模型名称
+  base_url: "http://127.0.0.1:8081"  # TEI 服务地址
+  api_key: ""                        # 仅 openai/deepseek/custom 需要
+
+vectordb:
+  provider: "sqlite-vec"             # sqlite-vec / custom
+  base_url: ""                       # 仅 custom 需要
 
 prompts:
   writer_system: |
