@@ -132,9 +132,9 @@ var defaultConfig = Config{
 		},
 	},
 	Embedding: EmbeddingConfig{
-		Provider: "ollama",
-		Model:    "embeddinggemma:latest",
-		BaseURL:  "http://localhost:11434",
+		Provider: "python",
+		Model:    "",
+		BaseURL:  "",
 	},
 	Storage: StorageConfig{
 		ProjectsDir: "data/projects",

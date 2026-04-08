@@ -2,6 +2,7 @@ package api
 
 import (
 	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -34,7 +35,21 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		cfg.Embedding.Provider,
 		cfg.Embedding.BaseURL,
 		cfg.Embedding.APIKey,
+		cfg.Embedding.Model,
 	)
+
+	// 如果是 Python provider，等待服务就绪
+	if cfg.Embedding.Provider == "python" || cfg.Embedding.Provider == "" {
+		pythonClient, ok := embeddingClient.(*llm.PythonEmbeddingClient)
+		if ok {
+			log.Println("Waiting for Python embedding service...")
+			if err := pythonClient.WaitForReady(30 * time.Second); err != nil {
+				log.Fatalf("Embedding service not ready: %v", err)
+			}
+			log.Println("Python embedding service ready")
+		}
+	}
+
 	handler.InitEmbeddingClient(embeddingClient)
 
 	// 中间件
@@ -210,6 +225,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			system.GET("/billing", handler.GetBillingStats)
 			system.GET("/goals", handler.GetWritingGoals)
 			system.PUT("/goals", handler.UpdateWritingGoals)
+			system.GET("/ollama/models", handler.GetOllamaModels)
 		}
 
 		// 向量存储
