@@ -151,24 +151,32 @@ func (c *OpenAIClient) GetEmbedding(ctx context.Context, text string) ([]float64
 }
 
 // NewEmbeddingClient 创建 Embedding 客户端（工厂函数）
-func NewEmbeddingClient(provider, baseURL, apiKey string) EmbeddingClient {
+func NewEmbeddingClient(provider, baseURL, apiKey, model string) EmbeddingClient {
 	switch provider {
+	case "python":
+		// 从端口文件读取或直接使用 URL
+		if baseURL != "" {
+			return NewPythonEmbeddingClientFromURL(baseURL)
+		}
+		return NewPythonEmbeddingClient("./embedding_port.txt")
 	case "tei":
 		return NewTEIEmbeddingClient(baseURL)
 	case "ollama":
 		llmCfg := &Config{
 			BaseURL: baseURL,
 			APIKey:  apiKey,
+			Models:  map[string]string{"embedding": model},
 		}
 		return NewOllamaClient(llmCfg)
 	case "openai", "deepseek":
 		llmCfg := &Config{
 			BaseURL: baseURL,
 			APIKey:  apiKey,
+			Models:  map[string]string{"embedding": model},
 		}
 		return NewOpenAIClient(llmCfg)
 	default:
-		// 默认使用 TEI
-		return NewTEIEmbeddingClient(baseURL)
+		// 默认使用 Python 服务
+		return NewPythonEmbeddingClient("./embedding_port.txt")
 	}
 }
