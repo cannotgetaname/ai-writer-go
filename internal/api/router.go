@@ -43,10 +43,16 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		pythonClient, ok := embeddingClient.(*llm.PythonEmbeddingClient)
 		if ok {
 			log.Println("Waiting for Python embedding service...")
-			if err := pythonClient.WaitForReady(30 * time.Second); err != nil {
+			timeout := time.Duration(cfg.Embedding.Timeout) * time.Second
+			if timeout <= 0 {
+				timeout = 30 * time.Second
+			}
+			if err := pythonClient.WaitForReady(timeout); err != nil {
 				log.Fatalf("Embedding service not ready: %v", err)
 			}
 			log.Println("Python embedding service ready")
+		} else {
+			log.Printf("Warning: Expected PythonEmbeddingClient but got %T, skipping readiness check", embeddingClient)
 		}
 	}
 

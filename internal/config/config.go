@@ -64,6 +64,7 @@ type EmbeddingConfig struct {
 	Model    string `mapstructure:"model"`    // embeddinggemma:latest / text-embedding-3-small
 	BaseURL  string `mapstructure:"base_url"` // http://localhost:11434
 	APIKey   string `mapstructure:"api_key"`  // OpenAI API key (if needed)
+	Timeout  int    `mapstructure:"timeout"`  // 等待服务就绪的超时时间（秒）
 }
 
 // PromptsConfig 提示词配置
@@ -135,6 +136,7 @@ var defaultConfig = Config{
 		Provider: "python",
 		Model:    "",
 		BaseURL:  "",
+		Timeout:  30, // 默认 30 秒
 	},
 	Storage: StorageConfig{
 		ProjectsDir: "data/projects",
