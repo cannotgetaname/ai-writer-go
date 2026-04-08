@@ -10,15 +10,16 @@ import (
 
 // Config 应用配置
 type Config struct {
-	Server      ServerConfig       `mapstructure:"server"`
-	LLM         LLMConfig          `mapstructure:"llm"`
-	Embedding   EmbeddingConfig    `mapstructure:"embedding"`
-	Storage     StorageConfig      `mapstructure:"storage"`
-	Prompts     PromptsConfig      `mapstructure:"prompts"`
-	Models      ModelsConfig       `mapstructure:"models"`
-	Pricing     PricingConfig      `mapstructure:"pricing"`
-	VectorStore VectorStoreConfig  `mapstructure:"vector_store"`
-	LastOpenBook string            `mapstructure:"last_open_book"`
+	Server       ServerConfig       `mapstructure:"server"`
+	LLM          LLMConfig          `mapstructure:"llm"`
+	Embedding    EmbeddingConfig    `mapstructure:"embedding"`
+	Storage      StorageConfig      `mapstructure:"storage"`
+	VectorStore  VectorStoreConfig  `mapstructure:"vector_store"`
+	VectorDB     VectorDBConfig     `mapstructure:"vectordb"`
+	Prompts      PromptsConfig      `mapstructure:"prompts"`
+	Models       ModelsConfig       `mapstructure:"models"`
+	Pricing      PricingConfig      `mapstructure:"pricing"`
+	LastOpenBook string             `mapstructure:"last_open_book"`
 }
 
 // ServerConfig 服务器配置
@@ -49,6 +50,12 @@ type StorageConfig struct {
 type VectorStoreConfig struct {
 	ChunkSize int `mapstructure:"chunk_size"`
 	Overlap   int `mapstructure:"overlap"`
+}
+
+// VectorDBConfig 向量数据库配置
+type VectorDBConfig struct {
+	Provider string `mapstructure:"provider"` // sqlite-vec / custom
+	BaseURL  string `mapstructure:"base_url"` // custom provider URL
 }
 
 // EmbeddingConfig 向量嵌入配置
@@ -136,6 +143,10 @@ var defaultConfig = Config{
 	VectorStore: VectorStoreConfig{
 		ChunkSize: 500,
 		Overlap:   100,
+	},
+	VectorDB: VectorDBConfig{
+		Provider: "sqlite-vec",
+		BaseURL:  "",
 	},
 	Prompts: PromptsConfig{
 		WriterSystem: `你是一个顶级网文作家，擅长热血、快节奏、爽点密集的风格。写作要求：
