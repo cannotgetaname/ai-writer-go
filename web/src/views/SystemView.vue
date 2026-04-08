@@ -57,6 +57,31 @@
               </el-table-column>
             </el-table>
 
+            <el-divider content-position="left">向量生成 (Embedding)</el-divider>
+            <el-form-item label="提供商">
+              <el-select v-model="config.embedding.provider" style="width: 200px;">
+                <el-option label="TEI (内置)" value="tei" />
+                <el-option label="Ollama (本地)" value="ollama" />
+                <el-option label="OpenAI" value="openai" />
+                <el-option label="DeepSeek" value="deepseek" />
+                <el-option label="自定义 API" value="custom" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="模型">
+              <el-input
+                v-model="config.embedding.model"
+                :disabled="config.embedding.provider !== 'tei'"
+                placeholder="bge-base-zh-v1.5"
+                style="width: 300px;"
+              />
+            </el-form-item>
+            <el-form-item v-if="config.embedding.provider !== 'tei'" label="API 地址">
+              <el-input v-model="config.embedding.base_url" style="width: 400px;" />
+            </el-form-item>
+            <el-form-item v-if="['openai', 'deepseek', 'custom'].includes(config.embedding.provider)" label="API Key">
+              <el-input v-model="config.embedding.api_key" type="password" show-password style="width: 400px;" />
+            </el-form-item>
+
             <el-divider content-position="left">向量存储</el-divider>
             <el-form-item label="分块大小">
               <el-input-number v-model="config.vector_store.chunk_size" :min="100" :max="2000" :step="100" />
@@ -199,6 +224,12 @@ const config = ref({
   vector_store: {
     chunk_size: 500,
     overlap: 100
+  },
+  embedding: {
+    provider: 'tei',
+    model: 'bge-base-zh-v1.5',
+    base_url: 'http://127.0.0.1:8081',
+    api_key: ''
   }
 })
 
@@ -262,7 +293,8 @@ const loadConfig = async () => {
       max_retries: data.max_retries || 3,
       models: data.models || config.value.models,
       temperatures: data.temperatures || config.value.temperatures,
-      vector_store: data.vector_store || config.value.vector_store
+      vector_store: data.vector_store || config.value.vector_store,
+      embedding: data.embedding || config.value.embedding
     }
   } catch (error) {
     console.error('加载配置失败:', error)
