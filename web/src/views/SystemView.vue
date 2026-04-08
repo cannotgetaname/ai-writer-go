@@ -70,7 +70,7 @@
             <el-form-item label="模型">
               <el-input
                 v-model="config.embedding.model"
-                :disabled="config.embedding.provider !== 'tei'"
+                :disabled="config.embedding.provider === 'tei'"
                 placeholder="bge-base-zh-v1.5"
                 style="width: 300px;"
               />
