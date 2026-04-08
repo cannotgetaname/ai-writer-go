@@ -11,6 +11,7 @@ import sys
 import socket
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import List
 
@@ -28,8 +29,14 @@ MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 MODEL_DIR = Path(__file__).parent.absolute() / "models"
 PORT_FILE = Path(__file__).parent.absolute() / "embedding_port.txt"
 
-# 全局模型实例
+# Input validation limits
+MAX_TEXTS_PER_REQUEST = 1000
+MAX_TOTAL_SIZE_BYTES = 100 * 1024  # 100KB
+
+# 全局模型实例和线程锁
 model = None
+model_lock = threading.Lock()
+model_loaded = False
 
 
 class EmbedRequest(BaseModel):
@@ -120,33 +127,54 @@ app = FastAPI(title="Embedding Service", version="1.0.0")
 @app.on_event("startup")
 async def startup_event():
     """启动时加载模型"""
-    global model
+    global model, model_loaded
     logger.info("Starting embedding service...")
-
-    # 查找可用端口并写入文件
-    port = find_available_port()
-    write_port_file(port)
 
     # 下载/加载模型
     try:
-        model = download_model()
+        with model_lock:
+            model = download_model()
+            model_loaded = True
         logger.info(f"Model loaded successfully, dimension: {model.get_sentence_embedding_dimension()}")
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
-        sys.exit(1)
+        raise RuntimeError(f"Failed to load embedding model: {e}")
+
+
+def validate_embed_request(request: EmbedRequest):
+    """验证嵌入请求的输入"""
+    if not request.texts:
+        raise HTTPException(status_code=400, detail="texts array is empty")
+
+    if len(request.texts) > MAX_TEXTS_PER_REQUEST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many texts: {len(request.texts)} exceeds maximum of {MAX_TEXTS_PER_REQUEST}"
+        )
+
+    # Check total size
+    total_size = sum(len(text.encode('utf-8')) for text in request.texts)
+    if total_size > MAX_TOTAL_SIZE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Total text size {total_size} bytes exceeds maximum of {MAX_TOTAL_SIZE_BYTES} bytes"
+        )
 
 
 @app.post("/embed", response_model=EmbedResponse)
 async def embed_texts(request: EmbedRequest):
     """获取文本向量"""
-    if model is None:
+    global model_loaded
+
+    if not model_loaded or model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    if not request.texts:
-        raise HTTPException(status_code=400, detail="texts array is empty")
+    # Validate input
+    validate_embed_request(request)
 
     try:
-        embeddings = model.encode(request.texts, convert_to_numpy=True)
+        with model_lock:
+            embeddings = model.encode(request.texts, convert_to_numpy=True)
         return EmbedResponse(
             embeddings=[emb.tolist() for emb in embeddings],
             model=MODEL_NAME.split("/")[-1],
@@ -162,14 +190,14 @@ async def health_check():
     """健康检查"""
     return HealthResponse(
         status="ok",
-        model_loaded=model is not None
+        model_loaded=model_loaded
     )
 
 
 @app.get("/model/info", response_model=ModelInfoResponse)
 async def model_info():
     """模型信息"""
-    if model is None:
+    if not model_loaded or model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
     # 计算模型目录大小
@@ -190,10 +218,10 @@ async def model_info():
 
 def main():
     """主入口"""
-    # 查找可用端口
+    # 查找可用端口（只调用一次）
     port = find_available_port()
 
-    # 写入端口文件（startup_event 也会写，但这里先写确保文件存在）
+    # 写入端口文件
     write_port_file(port)
 
     # 启动服务
