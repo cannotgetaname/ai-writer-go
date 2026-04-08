@@ -1,11 +1,14 @@
 package api
 
 import (
+	"log"
+
 	"github.com/gin-gonic/gin"
 
 	"ai-writer/internal/config"
 	"ai-writer/internal/api/handler"
 	"ai-writer/internal/api/middleware"
+	"ai-writer/internal/llm"
 	"ai-writer/internal/store"
 )
 
@@ -17,6 +20,22 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	jsonStore := store.NewJSONStore(".")
 	handler.InitStore(jsonStore)
 	handler.InitConfig(cfg)
+
+	// 初始化向量存储
+	vectorDBClient, err := store.NewSQLiteVectorDB(cfg.GetVectorDBPath())
+	if err != nil {
+		log.Printf("Warning: Failed to initialize vector DB: %v", err)
+	} else {
+		handler.InitVectorDB(vectorDBClient)
+	}
+
+	// 初始化 embedding 客户端
+	embeddingClient := llm.NewEmbeddingClient(
+		cfg.Embedding.Provider,
+		cfg.Embedding.BaseURL,
+		cfg.Embedding.APIKey,
+	)
+	handler.InitEmbeddingClient(embeddingClient)
 
 	// 中间件
 	router.Use(middleware.Cors())
@@ -191,6 +210,16 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			system.GET("/billing", handler.GetBillingStats)
 			system.GET("/goals", handler.GetWritingGoals)
 			system.PUT("/goals", handler.UpdateWritingGoals)
+		}
+
+		// 向量存储
+		vector := api.Group("/vector")
+		{
+			vector.POST("/index", handler.VectorIndexBook)
+			vector.POST("/index/chapter", handler.VectorIndexChapter)
+			vector.POST("/search", handler.VectorSearch)
+			vector.GET("/status", handler.VectorStatus)
+			vector.DELETE("/index/:book_name", handler.VectorDeleteBook)
 		}
 	}
 
