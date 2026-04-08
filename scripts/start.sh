@@ -29,6 +29,9 @@ echo "启动 Embedding 服务 (端口: $TEI_PORT)..."
 TEI_PID=$!
 echo "TEI PID: $TEI_PID"
 
+# 设置信号处理，确保退出时清理
+trap 'kill $TEI_PID 2>/dev/null; rm -f .tei.pid' EXIT INT TERM
+
 # 保存 PID
 echo $TEI_PID > .tei.pid
 
@@ -51,6 +54,5 @@ done
 echo "启动 AI Writer..."
 ./ai-writer server
 
-# 清理
-kill $TEI_PID 2>/dev/null
-rm -f .tei.pid
+# 清理 (由 trap 自动处理)
+# kill 和 rm 操作已由 trap 处理，无需重复

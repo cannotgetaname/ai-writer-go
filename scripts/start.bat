@@ -36,3 +36,7 @@ echo Embedding 服务就绪
 REM 启动主服务
 echo 启动 AI Writer...
 ai-writer.exe server
+
+REM 清理：终止 TEI 进程
+echo 正在关闭 Embedding 服务...
+taskkill /F /IM text-embeddings-router.exe > nul 2>&1
