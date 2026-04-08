@@ -1,0 +1,6 @@
+sentence-transformers==2.7.0
+fastapi==0.110.0
+uvicorn==0.27.1
+pydantic==2.6.1
+torch==2.2.0
+pyinstaller==6.4.0
