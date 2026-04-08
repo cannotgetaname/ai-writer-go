@@ -27,6 +27,16 @@ echo "Starting embedding service..."
 "$EMBEDDING_SERVER" &
 PYTHON_PID=$!
 
+# Signal handler for cleanup
+cleanup() {
+    echo ""
+    echo "Shutting down..."
+    kill $PYTHON_PID 2>/dev/null || true
+    rm -f "$SCRIPT_DIR/embedding_port.txt"
+    exit
+}
+trap cleanup INT TERM
+
 # 4. 等待端口文件生成（最多 60 秒）
 echo "Waiting for embedding service to start..."
 WAIT_COUNT=0
@@ -34,6 +44,12 @@ MAX_WAIT=60
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     if [ -f "$SCRIPT_DIR/embedding_port.txt" ]; then
         PORT=$(cat "$SCRIPT_DIR/embedding_port.txt")
+        # Validate port
+        if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+            echo "Error: Invalid port number in file: $PORT"
+            kill $PYTHON_PID 2>/dev/null || true
+            exit 1
+        fi
         echo "Embedding service started on port $PORT"
         break
     fi
@@ -65,7 +81,5 @@ fi
 echo "Starting AI Writer backend..."
 "$AI_WRITER" server
 
-# 6. Go 后端退出时，清理 Python 进程
-echo "Shutting down..."
-kill $PYTHON_PID 2>/dev/null || true
-rm -f "$SCRIPT_DIR/embedding_port.txt"
+# Go backend exits normally, cleanup happens via trap
+cleanup

@@ -44,6 +44,15 @@ exit /b 1
 
 :got_port
 set /p PORT=<"%SCRIPT_DIR%\embedding_port.txt"
+
+REM Validate port is numeric
+echo !PORT!| findstr /r "^[0-9][0-9]*$" >nul
+if errorlevel 1 (
+    echo Error: Invalid port number in file: !PORT!
+    taskkill /F /IM embedding_server.exe 2>nul
+    exit /b 1
+)
+
 echo Embedding service started on port !PORT!
 
 REM 5. 启动 Go 后端
