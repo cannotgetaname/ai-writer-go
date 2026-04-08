@@ -102,6 +102,9 @@ prompts:
   knowledge_filter_system: |
     你是一个专业的资料整理助手。你的任务是从检索到的碎片信息中，剔除无关噪音，筛选出对当前章节写作真正有帮助的背景信息（如人物之前的恩怨、物品的特殊设定、地点的具体样貌）。如果片段与当前剧情无关，请忽略。
 
+  json_only_architect_system: |
+    你是一个只输出JSON的架构师。
+
   inspiration_assistant_system: |
     你是一个网文灵感助手。请只返回请求的内容，不要废话。
 
