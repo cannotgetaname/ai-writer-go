@@ -21,11 +21,6 @@ jobs:
             archive: tar.gz
             goos: linux
             goarch: amd64
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            goos: linux
-            goarch: arm64
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
             archive: zip
@@ -77,9 +72,6 @@ jobs:
           go build -ldflags="-s -w" -o ai-writer${{ matrix.target == 'x86_64-pc-windows-gnu' && '.exe' || '' }} .
 
       - name: Build Rust embedding service
-        env:
-          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: |
           cd embedding_service_rust
           cargo build --release --target ${{ matrix.target }}
