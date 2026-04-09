@@ -12,7 +12,7 @@
 
 set -e
 
-VERSION=${1:-"1.3.0"}
+VERSION=${1:-"1.3.3"}
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$PROJECT_ROOT/dist"
