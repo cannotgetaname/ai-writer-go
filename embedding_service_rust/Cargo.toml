@@ -24,7 +24,7 @@ tracing-subscriber = "0.3"
 
 # Async
 anyhow = "1"
-hf-hub = { version = "0.4", features = ["tokio"] }
+hf-hub = { version = "0.4", default-features = false, features = ["tokio", "rustls-tls"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
 
 [profile.release]

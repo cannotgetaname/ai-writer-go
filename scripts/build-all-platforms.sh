@@ -66,10 +66,22 @@ build_package() {
     local RUST_BIN="target/release/embedding_server${BINARY_EXT}"
     if [ -n "$RUST_TARGET" ] && [ "$RUST_TARGET" != "native" ]; then
         rustup target add "$RUST_TARGET" 2>/dev/null || true
-        cargo build --release --target "$RUST_TARGET" 2>/dev/null
+
+        # 设置交叉编译环境变量
+        if [ "$RUST_TARGET" = "aarch64-unknown-linux-gnu" ]; then
+            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+            export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+        elif [ "$RUST_TARGET" = "x86_64-pc-windows-gnu" ]; then
+            export CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc
+            export CXX_x86_64_pc_windows_gnu=x86_64-w64-mingw32-g++
+            export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc
+        fi
+
+        cargo build --release --target "$RUST_TARGET"
         RUST_BIN="target/$RUST_TARGET/release/embedding_server${BINARY_EXT}"
     else
-        cargo build --release 2>/dev/null
+        cargo build --release
     fi
 
     if [ -f "$RUST_BIN" ]; then
