@@ -1536,7 +1536,11 @@ func AIGenerate(c *gin.Context) {
 
 // AIGenerateStream AI 流式生成
 func AIGenerateStream(c *gin.Context) {
-	bookID := c.Param("id")
+	// 优先从query参数获取，兼容路径参数
+	bookID := c.Query("book_name")
+	if bookID == "" {
+		bookID = c.Param("id")
+	}
 	chapterID := parseInt(c.Query("chapter_id"))
 	outline := c.Query("outline")
 
@@ -1859,42 +1863,161 @@ func ToolNaming(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成名称",
-		"command": fmt.Sprintf("ai-writer tool name --type %s --genre %s --count %d", req.Type, req.Genre, req.Count),
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateNames(c.Request.Context(), &service.NamingRequest{
+		Type:   req.Type,
+		Genre:  req.Genre,
+		Count:  req.Count,
+		Gender: req.Gender,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ToolCharacter 角色生成工具
 func ToolCharacter(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成角色",
-		"command": "ai-writer tool character --type <类型> --gender <性别> --genre <题材>",
+	var req struct {
+		Type   string `json:"type"`
+		Gender string `json:"gender"`
+		Genre  string `json:"genre"`
+		Theme  string `json:"theme"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateCharacter(c.Request.Context(), &service.CharacterRequest{
+		Type:   req.Type,
+		Gender: req.Gender,
+		Genre:  req.Genre,
+		Theme:  req.Theme,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ToolConflict 冲突生成工具
 func ToolConflict(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成冲突",
-		"command": "ai-writer tool conflict --type <类型> --genre <题材>",
+	var req struct {
+		Type    string `json:"type"`
+		Genre   string `json:"genre"`
+		Context string `json:"context"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateConflict(c.Request.Context(), &service.ConflictRequest{
+		Type:    req.Type,
+		Genre:   req.Genre,
+		Context: req.Context,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ToolScene 场景生成工具
 func ToolScene(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成场景",
-		"command": "ai-writer tool scene --type <类型> --location <地点>",
+	var req struct {
+		Type        string `json:"type"`
+		Location    string `json:"location"`
+		Characters  string `json:"characters"`
+		Mood        string `json:"mood"`
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateScene(c.Request.Context(), &service.SceneRequest{
+		Type:        req.Type,
+		Location:    req.Location,
+		Characters:  req.Characters,
+		Mood:        req.Mood,
+		Description: req.Description,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ToolGoldfinger 金手指生成工具
 func ToolGoldfinger(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成金手指",
-		"command": "ai-writer tool goldfinger --type <类型> --genre <题材>",
+	var req struct {
+		Type  string `json:"type"`
+		Genre string `json:"genre"`
+		Theme string `json:"theme"`
+		Level string `json:"level"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateGoldfinger(c.Request.Context(), &service.GoldfingerRequest{
+		Type:  req.Type,
+		Genre: req.Genre,
+		Theme: req.Theme,
+		Level: req.Level,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ToolTitle 书名生成工具
@@ -1910,10 +2033,25 @@ func ToolTitle(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成书名",
-		"command": fmt.Sprintf("ai-writer tool title --genre %s --count %d", req.Genre, req.Count),
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateTitle(c.Request.Context(), &service.TitleRequest{
+		Genre: req.Genre,
+		Theme: req.Theme,
+		Count: req.Count,
+		Style: req.Style,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ToolSynopsis 简介生成工具
@@ -1929,10 +2067,25 @@ func ToolSynopsis(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成简介",
-		"command": fmt.Sprintf("ai-writer tool synopsis --genre %s --type %s", req.Genre, req.Type),
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateSynopsis(c.Request.Context(), &service.SynopsisRequest{
+		Genre:     req.Genre,
+		MainChar:  req.MainChar,
+		WorldView: req.WorldView,
+		Type:      req.Type,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ToolTwist 剧情转折生成工具
@@ -1948,10 +2101,25 @@ func ToolTwist(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成剧情转折",
-		"command": fmt.Sprintf("ai-writer tool twist --type %s --genre %s", req.Type, req.Genre),
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateTwist(c.Request.Context(), &service.TwistRequest{
+		Type:       req.Type,
+		Genre:      req.Genre,
+		Context:    req.Context,
+		Characters: req.Characters,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ToolDialogue 对话生成工具
@@ -1967,10 +2135,25 @@ func ToolDialogue(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成对话",
-		"command": fmt.Sprintf("ai-writer tool dialogue --characters \"%s\" --situation \"%s\"", req.Characters, req.Situation),
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewToolboxService(llmClient)
+	result, err := svc.GenerateDialogue(c.Request.Context(), &service.DialogueRequest{
+		Characters: req.Characters,
+		Situation:  req.Situation,
+		Mood:       req.Mood,
+		Genre:      req.Genre,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ==================== 架构师 ====================
@@ -3407,4 +3590,254 @@ func GetOllamaModels(c *gin.Context) {
 		"models": models,
 		"count":  len(models),
 	})
+}
+// ==================== AI初始化项目 ====================
+
+// InitBook AI初始化项目
+func InitBook(c *gin.Context) {
+	var req struct {
+		BookName    string `json:"book_name" binding:"required"`
+		Idea        string `json:"idea" binding:"required"`
+		Genre       string `json:"genre"`
+		TargetWords int    `json:"target_words"`
+		VolumeCount int    `json:"volume_count"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 获取 LLM 客户端
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	// 创建书籍
+	book, err := jsonStore.CreateBook(req.BookName)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "创建书籍失败: " + err.Error()})
+		return
+	}
+
+	// 默认值
+	if req.Genre == "" {
+		req.Genre = "玄幻"
+	}
+	if req.TargetWords == 0 {
+		req.TargetWords = 1000000
+	}
+	if req.VolumeCount == 0 {
+		req.VolumeCount = 5
+	}
+
+	// 使用架构师服务生成世界观和大纲
+	architectSvc := service.NewArchitectService(llmClient, jsonStore)
+
+	// 1. 生成简介
+	synopsis, err := architectSvc.GenerateSynopsis(c.Request.Context(), req.Genre, req.Idea, "主角", req.TargetWords)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"book_name": req.BookName,
+			"message":   "简介生成失败: " + err.Error(),
+			"book":      book,
+		})
+		return
+	}
+
+	// 2. 生成世界观
+	worldViewReq := &service.WorldViewGenerateRequest{
+		Genre:    req.Genre,
+		Theme:    req.Idea,
+		Synopsis: synopsis.Synopsis,
+	}
+	worldView, err := architectSvc.GenerateWorldView(c.Request.Context(), worldViewReq)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"book_name": req.BookName,
+			"message":   "世界观生成失败: " + err.Error(),
+			"book":      book,
+			"synopsis":  synopsis,
+		})
+		return
+	}
+
+	// 3. 生成分卷大纲
+	volumes, err := architectSvc.GenerateVolumeOutlines(c.Request.Context(), req.BookName, synopsis, worldView)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"book_name": req.BookName,
+			"message":   "大纲生成失败: " + err.Error(),
+			"book":      book,
+			"synopsis":  synopsis,
+			"world_view": worldView,
+		})
+		return
+	}
+
+	// 4. 保存大纲和世界观
+	if err := architectSvc.SaveOutline(req.BookName, volumes); err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "保存大纲失败: " + err.Error()})
+		return
+	}
+
+	if err := architectSvc.SaveWorldView(req.BookName, worldView); err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "保存世界观失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "项目初始化成功",
+		"book_name":  req.BookName,
+		"book":       book,
+		"synopsis":   synopsis,
+		"world_view": worldView,
+		"volumes":    volumes,
+	})
+}
+
+// ==================== 一致性检查 ====================
+
+// ConsistencyCheck 一致性检查
+func ConsistencyCheck(c *gin.Context) {
+	bookID := c.Param("id")
+	fromChapter := parseInt(c.Query("from"))
+	toChapter := parseInt(c.Query("to"))
+	chapterID := parseInt(c.Query("chapter"))
+
+	// 获取 LLM 客户端
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	// 创建一致性检查服务
+	consistencySvc := service.NewConsistencyService(llmClient, jsonStore)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Minute)
+	defer cancel()
+
+	var result interface{}
+	if chapterID > 0 {
+		// 检查单个章节
+		result, err = consistencySvc.CheckChapter(ctx, bookID, chapterID)
+	} else if fromChapter > 0 && toChapter > 0 {
+		// 检查章节范围
+		result, err = consistencySvc.CheckRange(ctx, bookID, fromChapter, toChapter)
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请指定章节范围或章节ID"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "检查失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// ==================== 情感弧线 ====================
+
+// EmotionTrack 情感弧线追踪
+func EmotionTrack(c *gin.Context) {
+	bookID := c.Param("id")
+	chapterID := parseInt(c.Query("chapter"))
+
+	// 获取 LLM 客户端
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	// 创建情感弧线服务
+	emotionSvc := service.NewEmotionService(llmClient, jsonStore)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
+	defer cancel()
+
+	result, err := emotionSvc.TrackChapter(ctx, bookID, chapterID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "追踪失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// EmotionGetArc 获取角色情感弧线
+func EmotionGetArc(c *gin.Context) {
+	bookID := c.Param("id")
+	charName := c.Param("char_name")
+
+	// 创建情感弧线服务
+	emotionSvc := service.NewEmotionService(nil, jsonStore)
+
+	arc, err := emotionSvc.GetCharacterArc(bookID, charName)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "获取失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, arc)
+}
+
+// ==================== 信息边界 ====================
+
+// InfoBoundaryCheck 信息边界检查
+func InfoBoundaryCheck(c *gin.Context) {
+	bookID := c.Param("id")
+	chapterID := parseInt(c.Query("chapter"))
+
+	// 获取 LLM 客户端
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	// 创建信息边界服务
+	infoBoundarySvc := service.NewInfoBoundaryService(llmClient, jsonStore)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
+	defer cancel()
+
+	result, err := infoBoundarySvc.CheckLeak(ctx, bookID, chapterID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "检查失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// InfoBoundaryExtract 提取信息边界
+func InfoBoundaryExtract(c *gin.Context) {
+	bookID := c.Param("id")
+	chapterID := parseInt(c.Query("chapter"))
+
+	// 获取 LLM 客户端
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	// 创建信息边界服务
+	infoBoundarySvc := service.NewInfoBoundaryService(llmClient, jsonStore)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
+	defer cancel()
+
+	result, err := infoBoundarySvc.ExtractInfo(ctx, bookID, chapterID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "提取失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }

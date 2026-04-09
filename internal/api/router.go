@@ -76,6 +76,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		{
 			books.GET("", handler.ListBooks)
 			books.POST("", handler.CreateBook)
+			books.POST("/init", handler.InitBook) // AI初始化项目
 			books.GET("/:id", handler.GetBook)
 			books.PUT("/:id", handler.UpdateBook)
 			books.DELETE("/:id", handler.DeleteBook)
@@ -90,6 +91,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 				bookChapters.DELETE("/:chapter_id", handler.DeleteChapter)
 				bookChapters.GET("/:chapter_id/content", handler.GetChapterContent)
 				bookChapters.PUT("/:chapter_id/content", handler.UpdateChapterContent)
+				bookChapters.PUT("/:chapter_id/paragraph", handler.UpdateParagraph) // 更新单个段落
 			}
 
 			// 设定管理
@@ -158,17 +160,38 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 				bookAnalysis.POST("/run", handler.AnalysisRun)
 				bookAnalysis.GET("/reports", handler.AnalysisGetReports)
 			}
+
+			// 一致性检查
+			bookConsistency := books.Group("/:id/check")
+			{
+				bookConsistency.POST("/consistency", handler.ConsistencyCheck)
+			}
+
+			// 情感弧线
+			bookEmotion := books.Group("/:id/emotion")
+			{
+				bookEmotion.POST("/track", handler.EmotionTrack)
+				bookEmotion.GET("/:char_name", handler.EmotionGetArc)
+			}
+
+			// 信息边界
+			bookInfoBoundary := books.Group("/:id/info-boundary")
+			{
+				bookInfoBoundary.POST("/check", handler.InfoBoundaryCheck)
+				bookInfoBoundary.POST("/extract", handler.InfoBoundaryExtract)
+			}
 		}
 
 		// AI 写作（需要 LLM 配置）
 		ai := api.Group("/ai")
 		{
 			ai.POST("/generate", handler.AIGenerate)
-			ai.POST("/generate/stream", handler.AIGenerateStream)
+			ai.GET("/generate/stream", handler.AIGenerateStream)
 			ai.GET("/review", handler.AIReview)
 			ai.POST("/review", handler.AIReview)
 			ai.POST("/audit", handler.AIAudit)
 			ai.POST("/rewrite", handler.AIRewrite)
+			ai.POST("/rewrite-paragraph", handler.AIRewriteParagraph)
 			ai.POST("/continue", handler.AIContinue)
 		}
 

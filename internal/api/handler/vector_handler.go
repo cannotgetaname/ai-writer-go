@@ -90,9 +90,9 @@ func VectorIndexBook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":     "索引完成",
-		"book_name":   req.BookName,
-		"chunk_count": totalChunks,
+		"message":   "索引完成",
+		"book_name": req.BookName,
+		"chunks":    totalChunks,
 	})
 }
 
@@ -128,7 +128,7 @@ func VectorIndexChapter(c *gin.Context) {
 	if content == "" {
 		c.JSON(http.StatusOK, gin.H{
 			"message":     "章节内容为空，跳过索引",
-			"chunk_count": 0,
+			"chunks":      0,
 			"content_len": 0,
 		})
 		return

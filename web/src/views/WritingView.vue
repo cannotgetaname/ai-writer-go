@@ -459,24 +459,70 @@ const showGenerateDialog = () => {
 
 const generate = async () => {
   generating.value = true
-  try {
-    const res = await aiApi.generate({
-      book_name: bookId.value,
-      chapter_id: generateParams.value.chapter_id,
-      outline: generateParams.value.outline
-    })
-    if (res.data?.content) {
-      content.value = res.data.content
+  content.value = '' // 清空现有内容
+
+  // 使用流式生成
+  const eventSource = aiApi.generateStream({
+    book_name: bookId.value,
+    chapter_id: generateParams.value.chapter_id,
+    outline: generateParams.value.outline
+  })
+
+  // 监听 content 事件（后端发送的是 event: content）
+  eventSource.addEventListener('content', (event) => {
+    content.value += event.data
+  })
+
+  // 监听 done 事件
+  eventSource.addEventListener('done', (event) => {
+    eventSource.close()
+    generating.value = false
+    generateDialogVisible.value = false
+    updateWordCount()
+    ElMessage.success('内容生成成功')
+  })
+
+  // 监听 error 事件
+  eventSource.addEventListener('error', (event) => {
+    eventSource.close()
+    generating.value = false
+    if (content.value) {
+      updateWordCount()
+      ElMessage.warning('生成中断: ' + event.data)
+    } else {
+      ElMessage.error('生成失败: ' + event.data)
+    }
+  })
+
+  // 兼容旧的 onmessage 处理
+  eventSource.onmessage = (event) => {
+    if (event.data === '生成完成' || event.data === '[DONE]') {
+      eventSource.close()
+      generating.value = false
+      generateDialogVisible.value = false
       updateWordCount()
       ElMessage.success('内容生成成功')
-    } else {
-      ElMessage.info(res.data?.message || '生成完成，请查看结果')
+      return
     }
-    generateDialogVisible.value = false
-  } catch (error) {
-    ElMessage.error('生成失败: ' + (error.response?.data?.error || error.message))
+
+    if (event.data && event.data !== '生成完成') {
+      content.value += event.data
+    }
   }
-  generating.value = false
+
+  // 连接错误处理
+  eventSource.onerror = (error) => {
+    eventSource.close()
+    generating.value = false
+    if (content.value) {
+      updateWordCount()
+      ElMessage.warning('生成中断，已保存部分内容')
+    } else {
+      ElMessage.error('生成失败，请检查网络连接或API配置')
+    }
+  }
+
+  generateDialogVisible.value = false
 }
 
 const showContinueDialog = () => {

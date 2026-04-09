@@ -13,27 +13,27 @@ import (
 // InfoBoundaryManager 信息边界管理器
 type InfoBoundaryManager struct {
 	llmClient llm.Client
-	store     *store.JSONStore
+	Store     *store.JSONStore // 导出Store字段供服务层使用
 }
 
 // NewInfoBoundaryManager 创建信息边界管理器
 func NewInfoBoundaryManager(llmClient llm.Client, store *store.JSONStore) *InfoBoundaryManager {
 	return &InfoBoundaryManager{
 		llmClient: llmClient,
-		store:     store,
+		Store:     store,
 	}
 }
 
 // CheckInfoLeak 检测信息越界
 func (m *InfoBoundaryManager) CheckInfoLeak(ctx context.Context, bookName string, chapterID int) ([]string, error) {
 	// 加载章节内容
-	content, err := m.store.LoadChapterContent(bookName, chapterID)
+	content, err := m.Store.LoadChapterContent(bookName, chapterID)
 	if err != nil {
 		return nil, err
 	}
 
 	// 加载人物
-	characters, err := m.store.LoadCharacters(bookName)
+	characters, err := m.Store.LoadCharacters(bookName)
 	if err != nil {
 		return nil, err
 	}
@@ -109,12 +109,12 @@ func (m *InfoBoundaryManager) GetCharacterPOV(char *model.Character, chapterID i
 
 // ExtractInfoFromChapter 从章节提取信息更新
 func (m *InfoBoundaryManager) ExtractInfoFromChapter(ctx context.Context, bookName string, chapterID int) (map[string][]model.KnownInfo, error) {
-	content, err := m.store.LoadChapterContent(bookName, chapterID)
+	content, err := m.Store.LoadChapterContent(bookName, chapterID)
 	if err != nil {
 		return nil, err
 	}
 
-	characters, err := m.store.LoadCharacters(bookName)
+	characters, err := m.Store.LoadCharacters(bookName)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (m *InfoBoundaryManager) ExtractAndSave(ctx context.Context, bookName strin
 	}
 
 	// 持久化到角色数据
-	characters, err := m.store.LoadCharacters(bookName)
+	characters, err := m.Store.LoadCharacters(bookName)
 	if err != nil {
 		return infoMap, err
 	}
@@ -186,7 +186,7 @@ func (m *InfoBoundaryManager) ExtractAndSave(ctx context.Context, bookName strin
 		}
 	}
 
-	if err := m.store.SaveCharacters(bookName, characters); err != nil {
+	if err := m.Store.SaveCharacters(bookName, characters); err != nil {
 		return infoMap, err
 	}
 
