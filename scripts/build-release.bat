@@ -24,14 +24,15 @@ cd /d "%PROJECT_ROOT%"
 set CGO_ENABLED=0
 go build -ldflags="-s -w" -o "%DIST_DIR%\ai-writer.exe" .
 
-REM 3. 打包 Python embedding 服务
-echo Building Python embedding service...
-cd /d "%PROJECT_ROOT%\embedding_service"
-if not exist "dist\embedding_server.exe" (
-    echo Embedding server not built, please run: python build.py
+REM 3. 编译 Rust embedding 服务
+echo Building Rust embedding service...
+cd /d "%PROJECT_ROOT%\embedding_service_rust"
+if not exist "target\release\embedding_server.exe" (
+    echo Embedding server not built, please run: cargo build --release
+    echo Make sure Rust is installed: https://rustup.rs
     exit /b 1
 )
-copy "dist\embedding_server.exe" "%PROJECT_ROOT%\%DIST_DIR%\" >nul
+copy "target\release\embedding_server.exe" "%PROJECT_ROOT%\%DIST_DIR%\" >nul
 
 REM 4. 复制启动脚本
 echo Copying startup scripts...
@@ -84,8 +85,8 @@ echo 启动方式:
 echo   双击 start_with_embedding.bat
 echo.
 echo 首次启动:
-echo   - 自动下载 embedding 模型（约 118MB）
-echo   - 中国用户会自动使用镜像加速下载
+echo   - 自动下载 embedding 模型（约 22MB）
+echo   - 中国用户会自动检测并使用镜像加速下载
 echo.
 echo 配置文件:
 echo   - 编辑 config.yaml 配置 LLM API

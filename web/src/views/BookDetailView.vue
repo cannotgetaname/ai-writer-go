@@ -46,6 +46,10 @@
           <el-icon><Refresh /></el-icon>
           状态同步
         </el-button>
+        <el-button @click="indexBook" :loading="indexing">
+          <el-icon><Collection /></el-icon>
+          索引全书
+        </el-button>
         <el-button @click="goToAnalysis">
           <el-icon><DataAnalysis /></el-icon>
           分析
@@ -131,6 +135,36 @@
           </div>
           <el-empty v-else description="暂无世界观设定" :image-size="60" />
         </el-card>
+
+        <!-- 向量搜索 -->
+        <el-card style="margin-top: 20px;">
+          <template #header>
+            <span>相似内容搜索</span>
+          </template>
+          <el-input
+            v-model="searchQuery"
+            placeholder="输入关键词搜索相似内容..."
+            @keyup.enter="searchSimilar"
+            @input="onSearchInput"
+            style="margin-bottom: 10px;"
+          >
+            <template #append>
+              <el-button @click="searchSimilar" :loading="searching">
+                <el-icon><Search /></el-icon>
+              </el-button>
+            </template>
+          </el-input>
+          <div v-if="searchResults.length > 0" class="search-results">
+            <div v-for="(result, idx) in searchResults" :key="idx" class="search-result-item">
+              <div class="result-header">
+                <el-tag size="small">第{{ result.chapter_id }}章</el-tag>
+                <span class="result-score">相似度: {{ ((result.score || 0) * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="result-content">{{ result.content }}</div>
+            </div>
+          </div>
+          <el-empty v-else-if="searchQuery && !searching && hasSearched" description="无搜索结果" :image-size="40" />
+        </el-card>
       </el-col>
     </el-row>
 
@@ -153,7 +187,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { bookApi, exportApi } from '@/api'
+import { bookApi, exportApi, vectorApi } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -162,6 +196,11 @@ const bookId = computed(() => route.params.id)
 const book = ref({})
 const editDialogVisible = ref(false)
 const editName = ref('')
+const indexing = ref(false)
+const searchQuery = ref('')
+const searchResults = ref([])
+const searching = ref(false)
+const hasSearched = ref(false)
 
 const topCharacters = computed(() => {
   const chars = book.value.characters || []
@@ -233,6 +272,45 @@ const openChapter = (chapterId) => {
   router.push(`/books/${bookId.value}/write?chapter=${chapterId}`)
 }
 
+const indexBook = async () => {
+  indexing.value = true
+  try {
+    const res = await vectorApi.indexBook(bookId.value)
+    if (res.data?.error) {
+      ElMessage.error(res.data.error)
+    } else {
+      ElMessage.success(`索引完成，共 ${res.data?.chunks || 0} 个分块`)
+    }
+  } catch (error) {
+    ElMessage.error('索引失败: ' + (error.response?.data?.error || error.message))
+  }
+  indexing.value = false
+}
+
+const searchSimilar = async () => {
+  if (!searchQuery.value.trim()) return
+  searching.value = true
+  hasSearched.value = false
+  try {
+    const res = await vectorApi.search(bookId.value, searchQuery.value, 5)
+    if (res.data?.results) {
+      searchResults.value = res.data.results
+    } else if (res.data?.error) {
+      ElMessage.error(res.data.error)
+    }
+  } catch (error) {
+    ElMessage.error('搜索失败: ' + (error.response?.data?.error || error.message))
+  }
+  searching.value = false
+  hasSearched.value = true
+}
+
+const onSearchInput = () => {
+  // 输入时清除之前的搜索结果
+  searchResults.value = []
+  hasSearched.value = false
+}
+
 const loadBook = async () => {
   try {
     const res = await bookApi.get(bookId.value)
@@ -299,5 +377,41 @@ onMounted(() => {
 .worldview-summary p {
   margin: 5px 0;
   color: #666;
+}
+
+.search-results {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.search-result-item {
+  padding: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.result-score {
+  font-size: 12px;
+  color: #909399;
+}
+
+.result-content {
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>

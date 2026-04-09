@@ -216,6 +216,7 @@ func (s *SQLiteVectorDB) Search(ctx context.Context, bookName string, queryEmbed
 
 	results := make([]TextChunk, topK)
 	for i := 0; i < topK; i++ {
+		scored[i].chunk.Score = scored[i].score
 		results[i] = scored[i].chunk
 	}
 
@@ -265,6 +266,39 @@ func (s *SQLiteVectorDB) DeleteChapter(ctx context.Context, bookName string, cha
 
 	_, err = db.ExecContext(ctx, "DELETE FROM vec_chunks WHERE chapter_id = ?", chapterID)
 	return err
+}
+
+// RenameBook 重命名书籍的向量数据库
+func (s *SQLiteVectorDB) RenameBook(oldName, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	oldPath := filepath.Join(s.basePath, oldName+".db")
+	newPath := filepath.Join(s.basePath, newName+".db")
+
+	// 如果旧数据库不存在，直接返回（无需重命名）
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		return nil
+	}
+
+	// 关闭旧连接
+	if db, exists := s.connections[oldName]; exists {
+		db.Close()
+		delete(s.connections, oldName)
+	}
+
+	// 检查新名称是否已存在
+	if _, err := os.Stat(newPath); err == nil {
+		// 新名称已存在，删除旧文件
+		return os.Remove(oldPath)
+	}
+
+	// 重命名文件
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("failed to rename vector db: %w", err)
+	}
+
+	return nil
 }
 
 // GetStatus 获取状态信息

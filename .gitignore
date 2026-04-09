@@ -9,7 +9,7 @@ server
 
 # Test binary, built with `go test -c`
 *.test
-
+doc*
 # Output of the go coverage tool
 *.out
 
@@ -36,11 +36,18 @@ data/
 .ai-writer.pid
 .tei.pid
 
+# Embedding service
+embedding_port.txt
+embedding_service_rust/target/
+embedding_service_rust/.cache/
+.cache/
+
 # Vector database
 *.db
 
 # Release builds
 release/
+dist/
 
 # Node modules
 node_modules/
@@ -57,3 +64,6 @@ web/dist/
 # Downloads
 *.zip
 projects/
+
+# HuggingFace cache
+.huggingface/

@@ -23,6 +23,10 @@ type VectorDBClient interface {
 	// 删除指定书籍中特定章节的所有向量数据
 	DeleteChapter(ctx context.Context, bookName string, chapterID int) error
 
+	// RenameBook 重命名书籍
+	// 重命名向量数据库文件和更新内部缓存
+	RenameBook(oldName, newName string) error
+
 	// GetStatus 获取状态信息
 	// 返回向量数据库的状态信息，如分块数量、维度等
 	GetStatus(ctx context.Context, bookName string) (map[string]interface{}, error)

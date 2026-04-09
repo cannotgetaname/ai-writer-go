@@ -21,15 +21,15 @@ echo "Building Go backend..."
 cd "$PROJECT_ROOT"
 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$DIST_DIR/ai-writer" .
 
-# 3. 打包 Python embedding 服务
-echo "Building Python embedding service..."
-cd "$PROJECT_ROOT/embedding_service"
-if [ ! -f "dist/embedding_server" ]; then
+# 3. 编译 Rust embedding 服务
+echo "Building Rust embedding service..."
+cd "$PROJECT_ROOT/embedding_service_rust"
+if [ ! -f "target/release/embedding_server" ]; then
     echo "Embedding server not built, building now..."
-    pip install -r requirements.txt -q
-    python build.py
+    source ~/.cargo/env
+    cargo build --release
 fi
-cp dist/embedding_server "$PROJECT_ROOT/$DIST_DIR/"
+cp target/release/embedding_server "$PROJECT_ROOT/$DIST_DIR/"
 
 # 4. 复制启动脚本
 echo "Copying startup scripts..."
@@ -88,8 +88,8 @@ AI Writer - 网文创作助手
   Windows:     start_with_embedding.bat
 
 首次启动:
-  - 自动下载 embedding 模型（约 118MB）
-  - 中国用户会自动使用镜像加速下载
+  - 自动下载 embedding 模型（约 22MB）
+  - 中国用户会自动检测并使用镜像加速下载
 
 配置文件:
   - 编辑 config.yaml 配置 LLM API

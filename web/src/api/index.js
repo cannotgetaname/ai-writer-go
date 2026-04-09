@@ -206,7 +206,8 @@ export const systemApi = {
   updatePrompts: (data) => api.put('/system/prompts', data),
   getBilling: () => api.get('/system/billing'),
   getGoals: () => api.get('/system/goals'),
-  updateGoals: (data) => api.put('/system/goals', data)
+  updateGoals: (data) => api.put('/system/goals', data),
+  getOllamaModels: (baseUrl) => api.get(`/system/ollama/models?base_url=${encodeURIComponent(baseUrl || 'http://localhost:11434')}`)
 }
 
 // 向量存储

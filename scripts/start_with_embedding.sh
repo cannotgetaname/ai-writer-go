@@ -1,28 +1,25 @@
 #!/bin/bash
-# 同时启动 Python embedding 服务和 Go 后端
+# 同时启动 Rust embedding 服务和 Go 后端
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "Starting AI Writer with Python embedding service..."
+echo "Starting AI Writer with Rust embedding service..."
 
 # 1. 清理旧的端口文件
 rm -f "$SCRIPT_DIR/embedding_port.txt"
 
 # 2. 检查 embedding_server 是否存在
 EMBEDDING_SERVER="$SCRIPT_DIR/embedding_server"
-if [ ! -f "$EMBEDDING_SERVER" ]; then
-    EMBEDDING_SERVER="$SCRIPT_DIR/dist/embedding_server"
-fi
 
 if [ ! -f "$EMBEDDING_SERVER" ]; then
     echo "Error: embedding_server not found in $SCRIPT_DIR"
-    echo "Please run: cd embedding_service && python build.py"
+    echo "Please build it: cd embedding_service_rust && cargo build --release"
     exit 1
 fi
 
-# 3. 启动 Python embedding 服务（后台）
+# 3. 启动 Rust embedding 服务（后台）
 echo "Starting embedding service..."
 "$EMBEDDING_SERVER" &
 PYTHON_PID=$!

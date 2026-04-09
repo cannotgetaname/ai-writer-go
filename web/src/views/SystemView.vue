@@ -59,8 +59,8 @@
 
             <el-divider content-position="left">向量生成 (Embedding)</el-divider>
             <el-form-item label="提供商">
-              <el-select v-model="config.embedding.provider" style="width: 200px;">
-                <el-option label="TEI (内置)" value="tei" />
+              <el-select v-model="config.embedding.provider" @change="onEmbeddingProviderChange" style="width: 200px;">
+                <el-option label="Rust (内置)" value="python" />
                 <el-option label="Ollama (本地)" value="ollama" />
                 <el-option label="OpenAI" value="openai" />
                 <el-option label="DeepSeek" value="deepseek" />
@@ -68,14 +68,40 @@
               </el-select>
             </el-form-item>
             <el-form-item label="模型">
-              <el-input
+              <el-select
+                v-if="config.embedding.provider === 'ollama'"
                 v-model="config.embedding.model"
-                :disabled="config.embedding.provider === 'tei'"
-                placeholder="bge-base-zh-v1.5"
+                :loading="ollamaModelsLoading"
+                placeholder="选择模型"
+                filterable
+                style="width: 300px;"
+              >
+                <el-option
+                  v-for="model in ollamaModels"
+                  :key="model"
+                  :label="model"
+                  :value="model"
+                />
+              </el-select>
+              <el-input
+                v-else
+                v-model="config.embedding.model"
+                :disabled="config.embedding.provider === 'python'"
+                placeholder="all-MiniLM-L6-v2"
                 style="width: 300px;"
               />
+              <el-button
+                v-if="config.embedding.provider === 'ollama'"
+                type="primary"
+                link
+                @click="loadOllamaModels"
+                :loading="ollamaModelsLoading"
+                style="margin-left: 10px;"
+              >
+                刷新列表
+              </el-button>
             </el-form-item>
-            <el-form-item v-if="config.embedding.provider !== 'tei'" label="API 地址">
+            <el-form-item v-if="config.embedding.provider !== 'python'" label="API 地址">
               <el-input v-model="config.embedding.base_url" style="width: 400px;" />
             </el-form-item>
             <el-form-item v-if="['openai', 'deepseek', 'custom'].includes(config.embedding.provider)" label="API Key">
@@ -226,9 +252,9 @@ const config = ref({
     overlap: 100
   },
   embedding: {
-    provider: 'tei',
-    model: 'bge-base-zh-v1.5',
-    base_url: 'http://127.0.0.1:8081',
+    provider: 'python',
+    model: 'all-MiniLM-L6-v2',
+    base_url: '',
     api_key: ''
   }
 })
@@ -265,6 +291,9 @@ const goals = ref({
   target_date: null
 })
 
+const ollamaModels = ref([])
+const ollamaModelsLoading = ref(false)
+
 const prompts = ref({
   writer_system: '',
   architect_system: '',
@@ -296,6 +325,10 @@ const loadConfig = async () => {
       vector_store: data.vector_store || config.value.vector_store,
       embedding: data.embedding || config.value.embedding
     }
+    // 如果当前 embedding provider 是 ollama，加载模型列表
+    if (config.value.embedding.provider === 'ollama') {
+      loadOllamaModels()
+    }
   } catch (error) {
     console.error('加载配置失败:', error)
   }
@@ -307,6 +340,44 @@ const saveConfig = async () => {
     ElMessage.success('配置保存成功')
   } catch (error) {
     ElMessage.error('保存失败: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+const loadOllamaModels = async () => {
+  ollamaModelsLoading.value = true
+  try {
+    const baseUrl = config.value.embedding.base_url || 'http://localhost:11434'
+    const res = await systemApi.getOllamaModels(baseUrl)
+    if (res.data?.models) {
+      ollamaModels.value = res.data.models
+      if (res.data.models.length === 0) {
+        ElMessage.warning('Ollama 中没有找到模型，请先使用 ollama pull 下载模型')
+      }
+    } else if (res.data?.error) {
+      ElMessage.error(res.data.error)
+      if (res.data?.hint) {
+        ElMessage.info(res.data.hint)
+      }
+    }
+  } catch (error) {
+    ElMessage.error('获取模型列表失败: ' + error.message)
+  } finally {
+    ollamaModelsLoading.value = false
+  }
+}
+
+const onEmbeddingProviderChange = (provider) => {
+  if (provider === 'ollama') {
+    // 设置默认的 Ollama API 地址
+    if (!config.value.embedding.base_url || config.value.embedding.base_url === '') {
+      config.value.embedding.base_url = 'http://localhost:11434'
+    }
+    // 加载模型列表
+    loadOllamaModels()
+  } else if (provider === 'python') {
+    // Rust 内置服务，无需配置
+    config.value.embedding.base_url = ''
+    config.value.embedding.model = 'all-MiniLM-L6-v2'
   }
 }
 

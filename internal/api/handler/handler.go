@@ -156,6 +156,14 @@ func UpdateBook(c *gin.Context) {
 		return
 	}
 
+	// 重命名向量数据库
+	if vectorDBClient != nil {
+		if err := vectorDBClient.RenameBook(bookID, req.Name); err != nil {
+			// 向量数据库重命名失败不影响主流程，只记录日志
+			fmt.Printf("Warning: failed to rename vector db: %v\n", err)
+		}
+	}
+
 	// 返回更新后的书籍信息
 	book, _ := jsonStore.LoadBook(req.Name)
 	c.JSON(http.StatusOK, book)
@@ -2145,6 +2153,11 @@ func GetConfig(c *gin.Context) {
 			"projects_dir": cfg.Storage.ProjectsDir,
 			"vector_db_dir": cfg.Storage.VectorDBDir,
 		},
+		"embedding": map[string]string{
+			"provider": cfg.Embedding.Provider,
+			"model":    cfg.Embedding.Model,
+			"base_url": cfg.Embedding.BaseURL,
+		},
 		"pricing": cfg.Pricing,
 	}
 	c.JSON(http.StatusOK, cfgData)
@@ -2205,6 +2218,20 @@ func UpdateConfig(c *gin.Context) {
 		if overlap, ok := vectorStore["overlap"].(float64); ok {
 			viper.Set("vector_store.overlap", int(overlap))
 			cfg.VectorStore.Overlap = int(overlap)
+		}
+	}
+	if embedding, ok := req["embedding"].(map[string]interface{}); ok {
+		if provider, ok := embedding["provider"].(string); ok {
+			viper.Set("embedding.provider", provider)
+			cfg.Embedding.Provider = provider
+		}
+		if model, ok := embedding["model"].(string); ok {
+			viper.Set("embedding.model", model)
+			cfg.Embedding.Model = model
+		}
+		if baseURL, ok := embedding["base_url"].(string); ok {
+			viper.Set("embedding.base_url", baseURL)
+			cfg.Embedding.BaseURL = baseURL
 		}
 	}
 
@@ -3173,4 +3200,59 @@ func AnalysisGetReports(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, reports)
+}
+
+// ==================== Ollama 模型列表 ====================
+
+// GetOllamaModels 获取 Ollama 本地模型列表
+func GetOllamaModels(c *gin.Context) {
+	// 从请求获取 Ollama base URL
+	baseURL := c.Query("base_url")
+	if baseURL == "" {
+		baseURL = "http://localhost:11434"
+	}
+
+	// 调用 Ollama API: GET /api/tags
+	url := baseURL + "/api/tags"
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"error": "无法连接到 Ollama: " + err.Error(),
+			"hint":  "请确保 Ollama 正在运行，或检查 API 地址配置",
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusOK, gin.H{
+			"error": "Ollama 返回错误状态: " + resp.Status,
+		})
+		return
+	}
+
+	// 解析响应
+	var ollamaResp struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "解析响应失败: " + err.Error()})
+		return
+	}
+
+	// 提取模型名称
+	models := []string{}
+	for _, m := range ollamaResp.Models {
+		models = append(models, m.Name)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"models": models,
+		"count":  len(models),
+	})
 }

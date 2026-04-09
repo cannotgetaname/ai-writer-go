@@ -18,14 +18,15 @@ import (
 
 // TextChunk 文本分块
 type TextChunk struct {
-	ID        string    `json:"id"`
-	BookName  string    `json:"book_name"`
-	ChapterID int       `json:"chapter_id"`
-	ChunkIndex int      `json:"chunk_index"`
-	StartPos  int       `json:"start_pos"`
-	EndPos    int       `json:"end_pos"`
-	Content   string    `json:"content"`
-	Embedding []float64 `json:"embedding"`
+	ID         string    `json:"id"`
+	BookName   string    `json:"book_name"`
+	ChapterID  int       `json:"chapter_id"`
+	ChunkIndex int       `json:"chunk_index"`
+	StartPos   int       `json:"start_pos"`
+	EndPos     int       `json:"end_pos"`
+	Content    string    `json:"content"`
+	Embedding  []float64 `json:"embedding,omitempty"`
+	Score      float64   `json:"score,omitempty"` // 搜索时的相似度分数
 }
 
 // VectorIndex 向量索引

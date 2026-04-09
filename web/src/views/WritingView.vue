@@ -27,6 +27,10 @@
           <el-icon><DataAnalysis /></el-icon>
           审计世界状态
         </el-button>
+        <el-button @click="indexChapter" :loading="indexing" :disabled="!currentChapter">
+          <el-icon><Collection /></el-icon>
+          索引当前章节
+        </el-button>
         <el-button @click="saveContent" :loading="saving">
           <el-icon><Save /></el-icon>
           保存
@@ -317,7 +321,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { chapterApi, aiApi, foreshadowApi } from '@/api'
+import { chapterApi, aiApi, foreshadowApi, vectorApi } from '@/api'
 import WorldAuditDialog from '@/components/WorldAuditDialog.vue'
 
 const router = useRouter()
@@ -329,6 +333,7 @@ const currentChapter = ref(null)
 const content = ref('')
 const wordCount = ref(0)
 const saving = ref(false)
+const indexing = ref(false)
 const foreshadows = ref([])
 const reviewResult = ref(null)
 const reviewing = ref(false)
@@ -431,6 +436,13 @@ const saveContent = async () => {
   try {
     await chapterApi.saveContent(bookId.value, currentChapter.value.id, content.value)
     ElMessage.success('保存成功')
+    // 保存后自动重新索引当前章节
+    try {
+      await vectorApi.indexChapter(bookId.value, currentChapter.value.id)
+    } catch (e) {
+      // 索引失败不影响保存结果
+      console.warn('自动索引失败:', e)
+    }
   } catch (error) {
     ElMessage.error('保存失败')
   }
@@ -681,6 +693,26 @@ const loadForeshadows = async () => {
   } catch (error) {
     foreshadows.value = []
   }
+}
+
+// 索引当前章节
+const indexChapter = async () => {
+  if (!currentChapter.value) {
+    ElMessage.warning('请先选择章节')
+    return
+  }
+  indexing.value = true
+  try {
+    const res = await vectorApi.indexChapter(bookId.value, currentChapter.value.id)
+    if (res.data?.error) {
+      ElMessage.error(res.data.error)
+    } else {
+      ElMessage.success(`章节 ${currentChapter.value.id} 索引完成，共 ${res.data?.chunks || 0} 个分块`)
+    }
+  } catch (error) {
+    ElMessage.error('索引失败: ' + (error.response?.data?.error || error.message))
+  }
+  indexing.value = false
 }
 
 onMounted(() => {

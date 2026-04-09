@@ -125,10 +125,21 @@ func VectorIndexChapter(c *gin.Context) {
 		return
 	}
 
+	if content == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"message":     "章节内容为空，跳过索引",
+			"chunk_count": 0,
+			"content_len": 0,
+		})
+		return
+	}
+
 	// 分块
 	chunks := splitText(content, req.ChapterID, cfg.VectorStore.ChunkSize, cfg.VectorStore.Overlap)
 
 	// 生成向量
+	validChunks := 0
+	var embeddingErrors []string
 	for i := range chunks {
 		if len(chunks[i].Content) < 50 {
 			continue
@@ -136,24 +147,41 @@ func VectorIndexChapter(c *gin.Context) {
 
 		embedding, err := embeddingClient.GetEmbedding(c.Request.Context(), chunks[i].Content)
 		if err != nil {
+			embeddingErrors = append(embeddingErrors, err.Error())
 			continue
 		}
 		chunks[i].Embedding = embedding
+		validChunks++
 	}
 
 	// 先删除旧数据
 	vectorDBClient.DeleteChapter(c.Request.Context(), req.BookName, req.ChapterID)
 
-	// 存储新数据
-	if err := vectorDBClient.Index(c.Request.Context(), req.BookName, chunks); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "索引失败: " + err.Error()})
-		return
+	// 只存储有 embedding 的 chunks
+	var chunksWithEmbedding []store.TextChunk
+	for _, ch := range chunks {
+		if len(ch.Embedding) > 0 {
+			chunksWithEmbedding = append(chunksWithEmbedding, ch)
+		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	// 存储新数据
+	if len(chunksWithEmbedding) > 0 {
+		if err := vectorDBClient.Index(c.Request.Context(), req.BookName, chunksWithEmbedding); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "索引失败: " + err.Error()})
+			return
+		}
+	}
+
+	result := map[string]interface{}{
 		"message":     "索引完成",
-		"chunk_count": len(chunks),
-	})
+		"chunks":      len(chunksWithEmbedding),
+		"content_len": len(content),
+	}
+	if len(embeddingErrors) > 0 {
+		result["embedding_errors"] = embeddingErrors
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 // VectorSearch 搜索相似内容
