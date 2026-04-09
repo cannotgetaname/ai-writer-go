@@ -1,5 +1,5 @@
 @echo off
-REM 同时启动 Rust embedding 服务和 Go 后端
+REM Start Rust embedding service and Go backend
 
 setlocal enabledelayedexpansion
 
@@ -8,10 +8,10 @@ set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 
 echo Starting AI Writer with Rust embedding service...
 
-REM 1. 清理旧的端口文件
+REM 1. Clean old port file
 if exist "%SCRIPT_DIR%\embedding_port.txt" del "%SCRIPT_DIR%\embedding_port.txt" 2>nul
 
-REM 2. 检查 embedding_server 是否存在
+REM 2. Check embedding_server exists
 set EMBEDDING_SERVER=%SCRIPT_DIR%\embedding_server.exe
 
 if not exist "%EMBEDDING_SERVER%" (
@@ -20,11 +20,11 @@ if not exist "%EMBEDDING_SERVER%" (
     exit /b 1
 )
 
-REM 3. 启动 Rust embedding 服务（后台）
+REM 3. Start Rust embedding service (background)
 echo Starting embedding service...
 start /B "" "%EMBEDDING_SERVER%" >nul 2>&1
 
-REM 4. 等待端口文件生成（最多 60 秒）
+REM 4. Wait for port file (max 60 seconds)
 echo Waiting for embedding service to start...
 set COUNT=0
 set MAX_WAIT=60
@@ -54,7 +54,7 @@ if errorlevel 1 (
 
 echo Embedding service started on port !PORT!
 
-REM 5. 启动 Go 后端
+REM 5. Start Go backend
 set AI_WRITER=%SCRIPT_DIR%\ai-writer.exe
 if not exist "%AI_WRITER%" set AI_WRITER=%SCRIPT_DIR%\..\ai-writer.exe
 
@@ -67,7 +67,7 @@ if not exist "%AI_WRITER%" (
 echo Starting AI Writer backend...
 "%AI_WRITER%" server
 
-REM 6. Go 后端退出时，清理 embedding 服务进程
+REM 6. Cleanup on exit
 echo Shutting down...
 taskkill /F /IM embedding_server.exe 2>nul
 if exist "%SCRIPT_DIR%\embedding_port.txt" del "%SCRIPT_DIR%\embedding_port.txt" 2>nul
