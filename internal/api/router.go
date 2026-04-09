@@ -209,8 +209,13 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// 架构师
 		architect := api.Group("/architect")
 		{
-			architect.POST("/generate", handler.ArchitectGenerate)
-			architect.POST("/fission", handler.ArchitectFission)
+			architect.POST("/synopsis", handler.ArchitectSynopsis)
+			architect.POST("/worldview", handler.ArchitectWorldView)
+			architect.POST("/volumes", handler.ArchitectVolumes)
+			architect.POST("/volume/expand", handler.ArchitectVolumeExpand)
+			architect.POST("/chapter/expand", handler.ArchitectChapterExpand)
+			architect.POST("/save", handler.ArchitectSaveOutline)
+			architect.POST("/save-worldview", handler.ArchitectSaveWorldView)
 			architect.GET("/strategies", handler.ArchitectStrategies)
 		}
 

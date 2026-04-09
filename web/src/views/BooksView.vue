@@ -303,6 +303,9 @@ onMounted(() => {
 .book-info h3 {
   margin: 0 0 10px 0;
   font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .book-meta {

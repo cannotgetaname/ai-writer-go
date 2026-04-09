@@ -1975,45 +1975,197 @@ func ToolDialogue(c *gin.Context) {
 
 // ==================== 架构师 ====================
 
-// ArchitectGenerate 生成大纲
-func ArchitectGenerate(c *gin.Context) {
+// ArchitectSynopsis 生成全书总纲
+func ArchitectSynopsis(c *gin.Context) {
 	var req struct {
 		Genre       string `json:"genre"`
 		MainChar    string `json:"main_char"`
 		Theme       string `json:"theme"`
 		TargetWords int    `json:"target_words"`
-		Volumes     int    `json:"volumes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令生成大纲",
-		"command": fmt.Sprintf("ai-writer architect generate --genre %s --volumes %d", req.Genre, req.Volumes),
-	})
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	result, err := svc.GenerateSynopsis(c.Request.Context(), req.Genre, req.Theme, req.MainChar, req.TargetWords)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// ArchitectWorldView 生成世界观
+func ArchitectWorldView(c *gin.Context) {
+	var req service.WorldViewGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	result, err := svc.GenerateWorldView(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// ArchitectVolumes 生成分卷大纲
+func ArchitectVolumes(c *gin.Context) {
+	var req struct {
+		BookName  string                       `json:"book_name"`
+		Synopsis  *service.SynopsisResult      `json:"synopsis"`
+		WorldView *service.WorldViewGenerateResult `json:"world_view"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	volumes, err := svc.GenerateVolumeOutlines(c.Request.Context(), req.BookName, req.Synopsis, req.WorldView)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"volumes": volumes})
+}
+
+// ArchitectVolumeExpand 展开分卷章节
+func ArchitectVolumeExpand(c *gin.Context) {
+	var req struct {
+		BookName  string                       `json:"book_name"`
+		Volume    *service.VolumeOutline       `json:"volume"`
+		Synopsis  *service.SynopsisResult      `json:"synopsis"`
+		WorldView *service.WorldViewGenerateResult `json:"world_view"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	result, err := svc.ExpandVolume(c.Request.Context(), req.Volume, req.Synopsis, req.WorldView)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"chapters": result.Chapters})
+}
+
+// ArchitectChapterExpand 展开章节细纲
+func ArchitectChapterExpand(c *gin.Context) {
+	var req struct {
+		BookName  string                       `json:"book_name"`
+		Chapter   *service.ChapterOutline      `json:"chapter"`
+		WorldView *service.WorldViewGenerateResult `json:"world_view"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	result, err := svc.ExpandChapterDetail(c.Request.Context(), req.BookName, req.Chapter, req.WorldView)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// ArchitectSaveOutline 保存大纲
+func ArchitectSaveOutline(c *gin.Context) {
+	var req struct {
+		BookName string                `json:"book_name"`
+		Volumes  []service.VolumeOutline `json:"volumes"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	if err := svc.SaveOutline(req.BookName, req.Volumes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "大纲已保存"})
+}
+
+// ArchitectSaveWorldView 保存世界观
+func ArchitectSaveWorldView(c *gin.Context) {
+	var req struct {
+		BookName  string                       `json:"book_name"`
+		WorldView *service.WorldViewGenerateResult `json:"world_view"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	if err := svc.SaveWorldView(req.BookName, req.WorldView); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "世界观已保存"})
 }
 
 // ArchitectFission 分形裂变
-func ArchitectFission(c *gin.Context) {
-	var req struct {
-		Strategy string `json:"strategy"`
-		Count    int    `json:"count"`
-		Outline  string `json:"outline"`
-		NodeType string `json:"node_type"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "请使用 CLI 命令进行分形裂变",
-		"command": fmt.Sprintf("ai-writer architect fission --strategy %s --count %d", req.Strategy, req.Count),
-	})
-}
-
 // ArchitectStrategies 获取裂变策略
 func ArchitectStrategies(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
