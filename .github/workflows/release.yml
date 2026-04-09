@@ -1,0 +1,184 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            goos: linux
+            goarch: amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            goos: linux
+            goarch: arm64
+          - target: x86_64-pc-windows-gnu
+            os: ubuntu-latest
+            archive: zip
+            goos: windows
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install mingw for Windows
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+
+      - name: Build frontend
+        run: |
+          cd web
+          npm install
+          npm run build
+
+      - name: Build Go backend
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w" -o ai-writer${{ matrix.target == 'x86_64-pc-windows-gnu' && '.exe' || '' }} .
+
+      - name: Build Rust embedding service
+        run: |
+          cd embedding_service_rust
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare release package
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          PACKAGE_NAME=ai-writer-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}
+          mkdir -p $PACKAGE_NAME/data
+          mkdir -p $PACKAGE_NAME/web/dist
+
+          # Copy binaries
+          cp ai-writer${{ matrix.target == 'x86_64-pc-windows-gnu' && '.exe' || '' }} $PACKAGE_NAME/
+          cp embedding_service_rust/target/${{ matrix.target }}/release/embedding_server${{ matrix.target == 'x86_64-pc-windows-gnu' && '.exe' || '' }} $PACKAGE_NAME/
+
+          # Copy web assets
+          cp -r web/dist/* $PACKAGE_NAME/web/dist/
+
+          # Copy scripts
+          cp scripts/start_with_embedding.sh $PACKAGE_NAME/ 2>/dev/null || true
+          cp scripts/start_with_embedding.bat $PACKAGE_NAME/ 2>/dev/null || true
+          chmod +x $PACKAGE_NAME/start_with_embedding.sh 2>/dev/null || true
+
+          # Create config
+          cat > $PACKAGE_NAME/config.yaml << 'EOF'
+          server:
+            port: "8081"
+            data_dir: "./data"
+
+          llm:
+            provider: "deepseek"
+            api_key: ""
+            base_url: ""
+            models:
+              writer: "deepseek-chat"
+              architect: "deepseek-chat"
+              reviewer: "deepseek-chat"
+            temperatures:
+              writer: 1.5
+              architect: 1.0
+              reviewer: 0.5
+
+          embedding:
+            provider: "python"
+            timeout: 30
+
+          vector_store:
+            chunk_size: 500
+            overlap: 100
+          EOF
+
+          # Create README
+          cat > $PACKAGE_NAME/README.txt << EOF
+          AI Writer v${VERSION} - 网文创作助手
+          ========================
+
+          启动方式:
+            Linux/Mac:   ./start_with_embedding.sh
+            Windows:     start_with_embedding.bat
+
+          首次启动:
+            - 自动下载 embedding 模型（约 22MB）
+            - 中国用户自动使用镜像加速
+
+          配置:
+            - 编辑 config.yaml 配置 LLM API Key
+            - 支持 DeepSeek、OpenAI、Ollama
+
+          项目地址: https://github.com/cannotgetaname/ai-writer-go
+          EOF
+
+          # Archive
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            zip -r ${PACKAGE_NAME}.zip $PACKAGE_NAME
+          else
+            tar -czvf ${PACKAGE_NAME}.tar.gz $PACKAGE_NAME
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-writer-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ai-writer-*.tar.gz
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
