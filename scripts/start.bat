@@ -1,6 +1,9 @@
 @echo off
 REM start.bat - Windows 启动脚本
 
+REM Change to script directory
+cd /d "%~dp0"
+
 set TEI_PORT=8081
 set MODEL_ID=BAAI/bge-base-zh-v1.5
 set MODEL_CACHE=%USERPROFILE%\.cache\huggingface\hub\models--BAAI--bge-base-zh-v1.5

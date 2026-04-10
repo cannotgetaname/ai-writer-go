@@ -5,6 +5,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Change to script directory so relative paths work
+cd "$SCRIPT_DIR"
+
 echo "Starting AI Writer with Rust embedding service..."
 
 # 1. 清理旧的端口文件

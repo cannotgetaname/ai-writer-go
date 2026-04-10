@@ -3,6 +3,10 @@
 # start.sh - 启动脚本
 # 用法: 在 release 目录中运行此脚本
 
+# Change to script directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
 # 默认配置
 TEI_PORT=${TEI_PORT:-8081}
 MODEL_ID=${MODEL_ID:-"BAAI/bge-base-zh-v1.5"}

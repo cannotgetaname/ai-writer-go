@@ -6,6 +6,9 @@ setlocal enabledelayedexpansion
 set SCRIPT_DIR=%~dp0
 set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 
+REM Change to script directory so relative paths work
+cd /d "%SCRIPT_DIR%"
+
 echo Starting AI Writer with Rust embedding service...
 
 REM 1. Clean old port file
