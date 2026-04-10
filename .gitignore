@@ -60,6 +60,7 @@ web/dist/
 *.tmp
 *.temp
 .claude/
+.superpowers/
 
 # Downloads
 *.zip
