@@ -400,25 +400,63 @@
               </p>
             </div>
 
-            <!-- Volume Summary Cards -->
-            <div class="volume-cards">
+            <!-- Volume Cards with Expandable Chapters -->
+            <div class="volume-chapters-list">
               <el-card
                 v-for="(vol, idx) in volumeResults"
                 :key="idx"
-                class="volume-card"
-                :class="{ 'volume-card--expanded': vol.chapters?.length > 0 }"
-                shadow="hover"
+                class="volume-chapter-card"
+                :class="{ 'volume-chapter-card--expanded': vol.chapters?.length > 0 }"
               >
-                <div class="volume-card-header">
-                  <span class="volume-card-title">{{ vol.title }}</span>
-                  <el-tag
-                    :type="vol.chapters?.length > 0 ? 'success' : 'info'"
-                    size="small"
-                  >
-                    {{ vol.chapters?.length > 0 ? `${vol.chapters.length}章` : '未展开' }}
-                  </el-tag>
+                <template #header>
+                  <div class="volume-chapter-header">
+                    <div class="volume-chapter-title-row">
+                      <el-tag :type="vol.chapters?.length > 0 ? 'success' : 'info'" size="small">
+                        {{ vol.title }}
+                      </el-tag>
+                      <span class="volume-chapter-count">
+                        {{ vol.chapters?.length || vol.chapter_count || 0 }}章
+                      </span>
+                    </div>
+                    <div class="volume-chapter-actions">
+                      <el-button
+                        v-if="!vol.chapters || vol.chapters.length === 0"
+                        size="small"
+                        type="primary"
+                        :loading="loading && selectedVolumeIndex === idx"
+                        @click="selectedVolumeIndex = idx; expandVolume()"
+                      >
+                        展开章节
+                      </el-button>
+                      <el-button
+                        v-else
+                        size="small"
+                        link
+                        @click="toggleChapterList(idx)"
+                      >
+                        {{ expandedChapterVolumes.has(idx) ? '收起' : '展开' }}
+                      </el-button>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Volume Synopsis -->
+                <p class="volume-synopsis">{{ vol.synopsis }}</p>
+
+                <!-- Chapters List (when expanded) -->
+                <div v-if="vol.chapters && vol.chapters.length > 0 && expandedChapterVolumes.has(idx)" class="chapters-table">
+                  <el-table :data="vol.chapters" size="small" max-height="400">
+                    <el-table-column prop="index" label="#" width="50" />
+                    <el-table-column prop="title" label="章节名" width="150" />
+                    <el-table-column prop="synopsis" label="梗概" show-overflow-tooltip />
+                    <el-table-column prop="main_event" label="核心事件" width="150" show-overflow-tooltip />
+                  </el-table>
                 </div>
-                <p class="volume-card-synopsis">{{ vol.synopsis?.substring(0, 50) }}...</p>
+
+                <!-- Empty state for unexpanded volume -->
+                <div v-if="!vol.chapters || vol.chapters.length === 0" class="volume-empty">
+                  <el-text type="info" size="small">点击"展开章节"生成章节列表</el-text>
+                </div>
               </el-card>
             </div>
           </div>
@@ -525,6 +563,7 @@ const loadingText = ref('正在生成...')
 const outdatedSteps = ref(new Set())
 const selectedVolumeIndex = ref(-1)
 const selectedChapterPath = ref(null)
+const expandedChapterVolumes = ref(new Set()) // Track which volumes have chapters expanded
 
 // Edit mode state
 const editMode = ref({
@@ -993,6 +1032,15 @@ const toggleVolumeEdit = (idx) => {
   editMode.value.volumes[idx] = !editMode.value.volumes[idx]
 }
 
+// Toggle chapter list visibility for a volume
+const toggleChapterList = (idx) => {
+  if (expandedChapterVolumes.value.has(idx)) {
+    expandedChapterVolumes.value.delete(idx)
+  } else {
+    expandedChapterVolumes.value.add(idx)
+  }
+}
+
 // Save outline as chapters
 const saveOutline = async () => {
   if (volumeResults.value.length === 0) return
@@ -1251,6 +1299,61 @@ onMounted(() => {
   color: rgba(0, 0, 0, 0.6);
   margin: 0;
   line-height: 1.5;
+}
+
+/* Volume Chapter Cards */
+.volume-chapters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.volume-chapter-card {
+  border-radius: 8px;
+}
+
+.volume-chapter-card--expanded {
+  border-left: 4px solid #67c23a;
+}
+
+.volume-chapter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.volume-chapter-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.volume-chapter-count {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.volume-chapter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.volume-synopsis {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.8);
+  line-height: 1.6;
+}
+
+.volume-empty {
+  text-align: center;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+.chapters-table {
+  margin-top: 12px;
 }
 
 /* Scenes Section */
