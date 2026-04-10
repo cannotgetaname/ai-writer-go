@@ -112,7 +112,7 @@ var defaultConfig = Config{
 		Provider:   "deepseek",
 		BaseURL:    "https://api.deepseek.com",
 		MaxRetries: 3,
-		Timeout:    120,
+		Timeout:    600, // 10 分钟，reasoner 模型需要较长时间思考
 		Models: map[string]string{
 			"writer":    "deepseek-chat",
 			"architect": "deepseek-reasoner",

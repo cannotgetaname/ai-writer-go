@@ -78,6 +78,7 @@ const contextExpanded = ref(false)
   border-radius: 8px;
   padding: 24px;
   min-height: calc(100vh - 140px);
+  min-width: 600px;
   position: relative;
 }
 

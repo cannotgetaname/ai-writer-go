@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 300000, // 5分钟，AI生成需要较长时间
+  timeout: 600000, // 10分钟，架构师使用 reasoner 模型思考时间长
   headers: {
     'Content-Type': 'application/json'
   }
@@ -149,7 +149,10 @@ export const architectApi = {
   // 兼容旧接口
   generate: (data) => api.post('/architect/generate', data),
   fission: (data) => api.post('/architect/fission', data),
-  strategies: () => api.get('/architect/strategies')
+  strategies: () => api.get('/architect/strategies'),
+  // 数据持久化
+  saveData: (data) => api.post('/architect/save-data', data),
+  loadData: (bookName) => api.get(`/architect/load-data?book_name=${bookName}`)
 }
 
 // 拆书分析

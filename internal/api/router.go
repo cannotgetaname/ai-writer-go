@@ -240,6 +240,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			architect.POST("/save", handler.ArchitectSaveOutline)
 			architect.POST("/save-worldview", handler.ArchitectSaveWorldView)
 			architect.GET("/strategies", handler.ArchitectStrategies)
+			architect.POST("/generate", handler.ArchitectGenerate)    // 兼容旧接口
+			architect.POST("/fission", handler.ArchitectFission)      // 兼容旧接口
+			architect.POST("/save-data", handler.ArchitectSaveData)   // 保存架构师数据
+			architect.GET("/load-data", handler.ArchitectLoadData)    // 加载架构师数据
 		}
 
 		// 拆书分析

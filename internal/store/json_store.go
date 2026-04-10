@@ -326,6 +326,24 @@ func (s *JSONStore) loadBookMeta(name string) (*model.BookMeta, error) {
 	return &meta, nil
 }
 
+// LoadBookMeta 公开方法：加载书籍元数据
+func (s *JSONStore) LoadBookMeta(name string) (*model.BookMeta, error) {
+	return s.loadBookMeta(name)
+}
+
+// SaveBookMeta 保存书籍元数据
+func (s *JSONStore) SaveBookMeta(name string, meta *model.BookMeta) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !validName(name) {
+		return fmt.Errorf("书名不合法: %s", name)
+	}
+
+	path := filepath.Join(s.basePath, "projects", name, "metadata.json")
+	return s.saveJSON(path, meta)
+}
+
 // ==================== 数据加载 ====================
 
 // LoadBook 加载书籍完整信息

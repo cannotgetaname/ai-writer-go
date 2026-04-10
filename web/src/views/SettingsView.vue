@@ -30,6 +30,48 @@
         </el-card>
       </el-tab-pane>
 
+      <!-- 势力 -->
+      <el-tab-pane label="势力" name="factions">
+        <div class="tab-header">
+          <el-button type="primary" @click="showNewFactionDialog">
+            <el-icon><Plus /></el-icon>
+            新建势力
+          </el-button>
+        </div>
+        <el-table :data="factions">
+          <el-table-column prop="name" label="名称" />
+          <el-table-column prop="type" label="类型" width="100">
+            <template #default="{ row }">
+              <el-tag size="small">{{ row.type || '势力' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="leader" label="首领" />
+          <el-table-column label="成员数" width="80">
+            <template #default="{ row }">
+              {{ row.members?.length || 0 }}
+            </template>
+          </el-table-column>
+          <el-table-column label="领地数" width="80">
+            <template #default="{ row }">
+              {{ row.territories?.length || 0 }}
+            </template>
+          </el-table-column>
+          <el-table-column label="关系数" width="80">
+            <template #default="{ row }">
+              {{ row.relations?.length || 0 }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="180">
+            <template #default="{ row }">
+              <el-button-group>
+                <el-button size="small" @click="editFaction(row)">编辑</el-button>
+                <el-button size="small" type="danger" @click="deleteFaction(row.id)">删除</el-button>
+              </el-button-group>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
       <!-- 人物 -->
       <el-tab-pane label="人物" name="characters">
         <div class="tab-header">
@@ -139,58 +181,16 @@
           </el-table-column>
         </el-table>
       </el-tab-pane>
-
-      <!-- 势力 -->
-      <el-tab-pane label="势力" name="factions">
-        <div class="tab-header">
-          <el-button type="primary" @click="showNewFactionDialog">
-            <el-icon><Plus /></el-icon>
-            新建势力
-          </el-button>
-        </div>
-        <el-table :data="factions">
-          <el-table-column prop="name" label="名称" />
-          <el-table-column prop="type" label="类型" width="100">
-            <template #default="{ row }">
-              <el-tag size="small">{{ row.type || '势力' }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="leader" label="首领" />
-          <el-table-column label="成员数" width="80">
-            <template #default="{ row }">
-              {{ row.members?.length || 0 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="领地数" width="80">
-            <template #default="{ row }">
-              {{ row.territories?.length || 0 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="关系数" width="80">
-            <template #default="{ row }">
-              {{ row.relations?.length || 0 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="180">
-            <template #default="{ row }">
-              <el-button-group>
-                <el-button size="small" @click="editFaction(row)">编辑</el-button>
-                <el-button size="small" type="danger" @click="deleteFaction(row.id)">删除</el-button>
-              </el-button-group>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
     </el-tabs>
 
     <!-- 新建/编辑人物对话框 -->
     <el-dialog v-model="newCharacterDialogVisible" :title="newCharacter.id ? '编辑人物' : '新建人物'" width="600px">
       <el-form :model="newCharacter" label-width="100px">
-        <el-form-item label="姓名">
-          <el-input v-model="newCharacter.name" />
+        <el-form-item label="姓名" required>
+          <el-input v-model="newCharacter.name" placeholder="必填" />
         </el-form-item>
-        <el-form-item label="角色">
-          <el-select v-model="newCharacter.role">
+        <el-form-item label="角色" required>
+          <el-select v-model="newCharacter.role" allow-create filterable placeholder="选择或输入角色">
             <el-option label="主角" value="主角" />
             <el-option label="配角" value="配角" />
             <el-option label="反派" value="反派" />
@@ -198,7 +198,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="性别">
-          <el-select v-model="newCharacter.gender">
+          <el-select v-model="newCharacter.gender" allow-create filterable placeholder="选择或输入性别">
             <el-option label="男" value="男" />
             <el-option label="女" value="女" />
           </el-select>
@@ -216,7 +216,7 @@
           <el-input v-model="newCharacter.cultivation" placeholder="修为境界" />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="newCharacter.status">
+          <el-select v-model="newCharacter.status" allow-create filterable placeholder="选择或输入状态">
             <el-option label="存活" value="存活" />
             <el-option label="死亡" value="死亡" />
             <el-option label="失踪" value="失踪" />
@@ -225,6 +225,17 @@
         <el-form-item label="简介">
           <el-input v-model="newCharacter.bio" type="textarea" :rows="3" />
         </el-form-item>
+
+        <!-- 自定义属性 -->
+        <el-divider content-position="left">自定义属性</el-divider>
+        <div class="custom-attrs">
+          <div v-for="(value, key, index) in newCharacter.custom_attributes" :key="index" class="custom-attr-item">
+            <el-input v-model="Object.keys(newCharacter.custom_attributes)[index]" placeholder="属性名" style="width: 120px;" @change="updateCustomAttrKey(newCharacter, index, $event)" />
+            <el-input v-model="newCharacter.custom_attributes[key]" placeholder="属性值" style="flex: 1;" />
+            <el-button type="danger" size="small" @click="removeCustomAttr(newCharacter, key)">删除</el-button>
+          </div>
+          <el-button type="primary" size="small" @click="addCustomAttr(newCharacter)">添加属性</el-button>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="newCharacterDialogVisible = false">取消</el-button>
@@ -235,7 +246,7 @@
     <!-- 新建伏笔对话框 -->
     <el-dialog v-model="newForeshadowDialogVisible" title="新建伏笔" width="500px">
       <el-form :model="newForeshadow" label-width="100px">
-        <el-form-item label="类型">
+        <el-form-item label="类型" required>
           <el-select v-model="newForeshadow.type">
             <el-option label="物品" value="item" />
             <el-option label="人物" value="character" />
@@ -243,7 +254,7 @@
             <el-option label="悬念" value="mystery" />
           </el-select>
         </el-form-item>
-        <el-form-item label="内容">
+        <el-form-item label="内容" required>
           <el-input v-model="newForeshadow.content" type="textarea" :rows="3" />
         </el-form-item>
         <el-form-item label="埋设章节">
@@ -262,11 +273,11 @@
     <!-- 新建物品对话框 -->
     <el-dialog v-model="newItemDialogVisible" :title="newItem.id ? '编辑物品' : '新建物品'" width="600px">
       <el-form :model="newItem" label-width="100px">
-        <el-form-item label="名称">
-          <el-input v-model="newItem.name" />
+        <el-form-item label="名称" required>
+          <el-input v-model="newItem.name" placeholder="必填" />
         </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="newItem.type">
+        <el-form-item label="类型" required>
+          <el-select v-model="newItem.type" allow-create filterable placeholder="选择或输入类型">
             <el-option label="法宝" value="法宝" />
             <el-option label="武器" value="武器" />
             <el-option label="丹药" value="丹药" />
@@ -276,7 +287,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="品阶">
-          <el-select v-model="newItem.rank">
+          <el-select v-model="newItem.rank" allow-create filterable placeholder="选择或输入品阶">
             <el-option label="天阶" value="天阶" />
             <el-option label="地阶" value="地阶" />
             <el-option label="玄阶" value="玄阶" />
@@ -300,6 +311,17 @@
         <el-form-item label="描述">
           <el-input v-model="newItem.description" type="textarea" :rows="3" />
         </el-form-item>
+
+        <!-- 自定义属性 -->
+        <el-divider content-position="left">自定义属性</el-divider>
+        <div class="custom-attrs">
+          <div v-for="(value, key, index) in newItem.custom_attributes" :key="index" class="custom-attr-item">
+            <el-input :model-value="key" placeholder="属性名" style="width: 120px;" @change="updateCustomAttrKey(newItem, index, $event)" />
+            <el-input v-model="newItem.custom_attributes[key]" placeholder="属性值" style="flex: 1;" />
+            <el-button type="danger" size="small" @click="removeCustomAttr(newItem, key)">删除</el-button>
+          </div>
+          <el-button type="primary" size="small" @click="addCustomAttr(newItem)">添加属性</el-button>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="newItemDialogVisible = false">取消</el-button>
@@ -310,14 +332,14 @@
     <!-- 新建地点对话框 -->
     <el-dialog v-model="newLocationDialogVisible" :title="newLocation.id ? '编辑地点' : '新建地点'" width="500px">
       <el-form :model="newLocation" label-width="100px">
-        <el-form-item label="名称">
-          <el-input v-model="newLocation.name" />
+        <el-form-item label="名称" required>
+          <el-input v-model="newLocation.name" placeholder="必填" />
         </el-form-item>
         <el-form-item label="所属势力">
           <el-input v-model="newLocation.faction" />
         </el-form-item>
         <el-form-item label="危险等级">
-          <el-select v-model="newLocation.danger">
+          <el-select v-model="newLocation.danger" allow-create filterable placeholder="选择或输入危险等级">
             <el-option label="安全" value="安全" />
             <el-option label="低危" value="低危" />
             <el-option label="中危" value="中危" />
@@ -327,6 +349,17 @@
         <el-form-item label="描述">
           <el-input v-model="newLocation.description" type="textarea" :rows="3" />
         </el-form-item>
+
+        <!-- 自定义属性 -->
+        <el-divider content-position="left">自定义属性</el-divider>
+        <div class="custom-attrs">
+          <div v-for="(value, key, index) in newLocation.custom_attributes" :key="index" class="custom-attr-item">
+            <el-input :model-value="key" placeholder="属性名" style="width: 120px;" @change="updateCustomAttrKey(newLocation, index, $event)" />
+            <el-input v-model="newLocation.custom_attributes[key]" placeholder="属性值" style="flex: 1;" />
+            <el-button type="danger" size="small" @click="removeCustomAttr(newLocation, key)">删除</el-button>
+          </div>
+          <el-button type="primary" size="small" @click="addCustomAttr(newLocation)">添加属性</el-button>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="newLocationDialogVisible = false">取消</el-button>
@@ -337,11 +370,11 @@
     <!-- 新建/编辑势力对话框 -->
     <el-dialog v-model="newFactionDialogVisible" :title="newFaction.id ? '编辑势力' : '新建势力'" width="700px">
       <el-form :model="newFaction" label-width="100px">
-        <el-form-item label="名称">
-          <el-input v-model="newFaction.name" />
+        <el-form-item label="名称" required>
+          <el-input v-model="newFaction.name" placeholder="必填" />
         </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="newFaction.type">
+        <el-form-item label="类型" required>
+          <el-select v-model="newFaction.type" allow-create filterable placeholder="选择或输入类型">
             <el-option label="宗门" value="宗门" />
             <el-option label="家族" value="家族" />
             <el-option label="帮派" value="帮派" />
@@ -398,6 +431,17 @@
             </el-select>
           </div>
         </el-form-item>
+
+        <!-- 自定义属性 -->
+        <el-divider content-position="left">自定义属性</el-divider>
+        <div class="custom-attrs">
+          <div v-for="(value, key, index) in newFaction.custom_attributes" :key="index" class="custom-attr-item">
+            <el-input :model-value="key" placeholder="属性名" style="width: 120px;" @change="updateCustomAttrKey(newFaction, index, $event)" />
+            <el-input v-model="newFaction.custom_attributes[key]" placeholder="属性值" style="flex: 1;" />
+            <el-button type="danger" size="small" @click="removeCustomAttr(newFaction, key)">删除</el-button>
+          </div>
+          <el-button type="primary" size="small" @click="addCustomAttr(newFaction)">添加属性</el-button>
+        </div>
       </el-form>
       <template #footer>
         <el-button @click="newFactionDialogVisible = false">取消</el-button>
@@ -429,19 +473,19 @@ const foreshadows = ref([])
 const factions = ref([])
 
 const newCharacterDialogVisible = ref(false)
-const newCharacter = ref({ name: '', role: '配角', gender: '男', bio: '', status: '存活', faction: '', sect: '', position: '', cultivation: '', id: null })
+const newCharacter = ref({ name: '', role: '配角', gender: '男', bio: '', status: '存活', faction: '', sect: '', position: '', cultivation: '', custom_attributes: {}, id: null })
 
 const newForeshadowDialogVisible = ref(false)
 const newForeshadow = ref({ type: 'plot', content: '', source_chapter: 1, target_chapter: 10 })
 
 const newItemDialogVisible = ref(false)
-const newItem = ref({ name: '', type: '法宝', owner: '', description: '', rank: '', faction: '', sect: '', location: '', id: null })
+const newItem = ref({ name: '', type: '法宝', owner: '', description: '', rank: '', faction: '', sect: '', location: '', custom_attributes: {}, id: null })
 
 const newLocationDialogVisible = ref(false)
-const newLocation = ref({ name: '', faction: '', danger: '安全', description: '', id: null })
+const newLocation = ref({ name: '', faction: '', danger: '安全', description: '', custom_attributes: {}, id: null })
 
 const newFactionDialogVisible = ref(false)
-const newFaction = ref({ name: '', type: '势力', leader: '', description: '', relations: [], members: [], territories: [], id: null })
+const newFaction = ref({ name: '', type: '势力', leader: '', description: '', relations: [], members: [], territories: [], custom_attributes: {}, id: null })
 
 // 其他势力（用于关系选择）
 const otherFactions = computed(() => {
@@ -489,7 +533,7 @@ const loadCharacters = async () => {
 }
 
 const showNewCharacterDialog = () => {
-  newCharacter.value = { name: '', role: '配角', gender: '男', bio: '', status: '存活', faction: '', sect: '', position: '', cultivation: '', id: null }
+  newCharacter.value = { name: '', role: '配角', gender: '男', bio: '', status: '存活', faction: '', sect: '', position: '', cultivation: '', custom_attributes: {}, id: null }
   newCharacterDialogVisible.value = true
 }
 
@@ -505,6 +549,7 @@ const editCharacter = async (char) => {
     sect: char.sect || '',
     position: char.position || '',
     cultivation: char.cultivation || '',
+    custom_attributes: char.custom_attributes || {},
     id: char.id
   }
   newCharacterDialogVisible.value = true
@@ -565,6 +610,7 @@ const editItem = (item) => {
     faction: item.faction || '',
     sect: item.sect || '',
     location: item.location || '',
+    custom_attributes: item.custom_attributes || {},
     id: item.id
   }
   newItemDialogVisible.value = true
@@ -619,6 +665,7 @@ const editLocation = (loc) => {
     faction: loc.faction || '',
     danger: loc.danger || '安全',
     description: loc.description,
+    custom_attributes: loc.custom_attributes || {},
     id: loc.id
   }
   newLocationDialogVisible.value = true
@@ -719,6 +766,7 @@ const editFaction = (faction) => {
     })) || [],
     members: faction.members || [],
     territories: faction.territories || [],
+    custom_attributes: faction.custom_attributes || {},
     id: faction.id
   }
   newFactionDialogVisible.value = true
@@ -726,6 +774,16 @@ const editFaction = (faction) => {
 
 const createFaction = async () => {
   try {
+    // 验证必填字段
+    if (!newFaction.value.name) {
+      ElMessage.error('请填写势力名称')
+      return
+    }
+    if (!newFaction.value.type) {
+      ElMessage.error('请选择势力类型')
+      return
+    }
+
     // 加载当前世界观数据
     const res = await settingsApi.getWorldView(bookId.value)
     const worldviewData = res.data || {
@@ -736,6 +794,9 @@ const createFaction = async () => {
 
     if (!worldviewData.key_elements) {
       worldviewData.key_elements = { factions: [] }
+    }
+    if (!worldviewData.key_elements.factions) {
+      worldviewData.key_elements.factions = []
     }
 
     // 过滤掉空的关系
@@ -749,11 +810,12 @@ const createFaction = async () => {
           id: newFaction.value.id,
           name: newFaction.value.name,
           type: newFaction.value.type,
-          leader: newFaction.value.leader,
-          description: newFaction.value.description,
+          leader: newFaction.value.leader || '',
+          description: newFaction.value.description || '',
           relations: validRelations,
-          members: newFaction.value.members,
-          territories: newFaction.value.territories
+          members: newFaction.value.members || [],
+          territories: newFaction.value.territories || [],
+          custom_attributes: newFaction.value.custom_attributes || {}
         }
       }
       ElMessage.success('势力更新成功')
@@ -764,11 +826,12 @@ const createFaction = async () => {
         id: newId,
         name: newFaction.value.name,
         type: newFaction.value.type,
-        leader: newFaction.value.leader,
-        description: newFaction.value.description,
+        leader: newFaction.value.leader || '',
+        description: newFaction.value.description || '',
         relations: validRelations,
-        members: newFaction.value.members,
-        territories: newFaction.value.territories
+        members: newFaction.value.members || [],
+        territories: newFaction.value.territories || [],
+        custom_attributes: newFaction.value.custom_attributes || {}
       })
       ElMessage.success('势力创建成功')
     }
@@ -778,6 +841,7 @@ const createFaction = async () => {
     newFactionDialogVisible.value = false
     loadFactions()
   } catch (error) {
+    console.error('创建势力失败:', error)
     ElMessage.error(newFaction.value.id ? '更新失败' : '创建失败')
   }
 }
@@ -810,6 +874,31 @@ const addFactionRelation = () => {
 
 const removeFactionRelation = (index) => {
   newFaction.value.relations.splice(index, 1)
+}
+
+// ========== 自定义属性管理 ==========
+const addCustomAttr = (entity) => {
+  if (!entity.custom_attributes) {
+    entity.custom_attributes = {}
+  }
+  const key = `属性${Object.keys(entity.custom_attributes).length + 1}`
+  entity.custom_attributes[key] = ''
+}
+
+const removeCustomAttr = (entity, key) => {
+  if (entity.custom_attributes) {
+    delete entity.custom_attributes[key]
+  }
+}
+
+const updateCustomAttrKey = (entity, index, newKey) => {
+  const keys = Object.keys(entity.custom_attributes || {})
+  const oldKey = keys[index]
+  if (oldKey && oldKey !== newKey) {
+    const value = entity.custom_attributes[oldKey]
+    delete entity.custom_attributes[oldKey]
+    entity.custom_attributes[newKey] = value
+  }
 }
 
 onMounted(() => {
@@ -857,5 +946,16 @@ onMounted(() => {
 .faction-members,
 .faction-territories {
   width: 100%;
+}
+
+.custom-attrs {
+  width: 100%;
+}
+
+.custom-attr-item {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: center;
 }
 </style>

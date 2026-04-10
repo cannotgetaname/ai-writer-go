@@ -64,6 +64,9 @@ type Character struct {
 
 	// 势力变更历史
 	FactionHistory []FactionChange `json:"faction_history,omitempty"`
+
+	// 自定义属性
+	CustomAttributes map[string]string `json:"custom_attributes,omitempty"`
 }
 
 // FactionChange 势力变更记录

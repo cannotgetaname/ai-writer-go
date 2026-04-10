@@ -55,6 +55,9 @@ type Faction struct {
 	Relations   []FactionRelation `json:"relations,omitempty"`   // 关联势力（结构化）
 	Members     []string         `json:"members,omitempty"`     // 成员列表（角色名）
 	Territories []string         `json:"territories,omitempty"` // 领地列表（地点名）
+
+	// 自定义属性
+	CustomAttributes map[string]string `json:"custom_attributes,omitempty"`
 }
 
 type WorldViewBackground struct {

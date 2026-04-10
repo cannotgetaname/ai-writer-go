@@ -26,6 +26,91 @@ type BookMeta struct {
 	TargetWords int       `json:"target_words,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+
+	// 架构师数据
+	ArchitectData *ArchitectData `json:"architect_data,omitempty"`
+}
+
+// ArchitectData 架构师生成数据
+type ArchitectData struct {
+	Synopsis       *SynopsisJSON                `json:"synopsis,omitempty"`
+	WorldView      *WorldViewJSON               `json:"world_view,omitempty"`
+	Volumes        []VolumeJSON                 `json:"volumes,omitempty"`
+	ChapterDetails map[string]ChapterDetailJSON `json:"chapter_details,omitempty"` // 章节细纲，key 为 "卷索引_章索引"
+	CurrentStep    int                          `json:"current_step,omitempty"`    // 当前步骤进度
+	UpdatedAt      time.Time                    `json:"updated_at"`
+}
+
+// SynopsisJSON 总纲数据（前端格式）
+type SynopsisJSON struct {
+	Title       string   `json:"title"`
+	Genre       string   `json:"genre"`
+	Theme       string   `json:"theme"`
+	WordCount   int      `json:"word_count"`
+	Synopsis    string   `json:"synopsis"`
+	MainPlot    string   `json:"main_plot"`
+	SubPlots    []string `json:"sub_plots"`
+	MainChars   []string `json:"main_chars"`
+	EndingType  string   `json:"ending_type"`
+	VolumeCount int      `json:"volume_count"`
+}
+
+// WorldViewJSON 世界观数据（前端格式）
+type WorldViewJSON struct {
+	Genre           string `json:"genre"`
+	Era             string `json:"era"`
+	TechLevel       string `json:"tech_level"`
+	PowerSystem     string `json:"power_system"`
+	SocialStructure string `json:"social_structure"`
+	SpecialRules    string `json:"special_rules"`
+	ImportantItems  string `json:"important_items"`
+	Organizations   string `json:"organizations"`
+	Locations       string `json:"locations"`
+	History         string `json:"history"`
+	MainConflict    string `json:"main_conflict"`
+	Development     string `json:"development"`
+}
+
+// VolumeJSON 分卷数据（前端格式）
+type VolumeJSON struct {
+	ID           string          `json:"id"`
+	Index        int             `json:"index"`
+	Title        string          `json:"title"`
+	Synopsis     string          `json:"synopsis"`
+	MainEvent    string          `json:"main_event"`
+	EmotionArc   string          `json:"emotion_arc"`
+	ChapterCount int             `json:"chapter_count"`
+	Chapters     []ChapterJSON   `json:"chapters"`
+}
+
+// ChapterJSON 章节大纲数据
+type ChapterJSON struct {
+	ID         string `json:"id"`
+	Index      int    `json:"index"`
+	VolumeIndex int   `json:"volume_index"`
+	Title      string `json:"title"`
+	Synopsis   string `json:"synopsis"`
+	MainEvent  string `json:"main_event"`
+	Characters string `json:"characters"`
+	Location   string `json:"location"`
+	Foreshadow string `json:"foreshadow"`
+}
+
+// ChapterDetailJSON 章节细纲数据
+type ChapterDetailJSON struct {
+	ChapterKey  string        `json:"chapter_key"` // 如 "0_1" 表示第一卷第二章
+	WordTarget  int           `json:"word_target"`
+	Scenes      []SceneJSON   `json:"scenes,omitempty"`
+	Dialogues   []string      `json:"dialogues,omitempty"`
+	Foreshadows []string      `json:"foreshadows,omitempty"`
+}
+
+// SceneJSON 场景数据
+type SceneJSON struct {
+	Location   string `json:"location"`
+	Characters string `json:"characters"`
+	Event      string `json:"event"`
+	Mood       string `json:"mood"`
 }
 
 // Volume 分卷

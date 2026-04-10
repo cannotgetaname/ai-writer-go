@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"ai-writer/internal/llm"
@@ -224,6 +225,16 @@ func (s *ArchitectService) GenerateWorldView(ctx context.Context, req *WorldView
 
 // GenerateVolumeOutlines 生成分卷大纲
 func (s *ArchitectService) GenerateVolumeOutlines(ctx context.Context, bookName string, synopsis *SynopsisResult, worldView *WorldViewGenerateResult) ([]VolumeOutline, error) {
+	// 参数验证
+	if synopsis == nil {
+		return nil, fmt.Errorf("缺少总纲数据")
+	}
+	if worldView == nil {
+		return nil, fmt.Errorf("缺少世界观数据")
+	}
+
+	// 简化prompt，只生成卷级大纲，不包含详细章节
+	// 章节大纲可以通过"展开分卷"功能单独生成
 	prompt := fmt.Sprintf(`请根据以下信息设计分卷大纲。
 
 【全书总纲】
@@ -234,7 +245,7 @@ func (s *ArchitectService) GenerateVolumeOutlines(ctx context.Context, bookName 
 社会结构: %s
 
 【要求】
-共%d卷，每卷设计章节大纲。
+共%d卷，只设计卷级大纲，不需要详细章节。
 
 请严格按JSON格式输出：
 {
@@ -243,44 +254,49 @@ func (s *ArchitectService) GenerateVolumeOutlines(ctx context.Context, bookName 
       "id": "vol_1",
       "index": 1,
       "title": "第一卷名称",
-      "synopsis": "本卷梗概",
-      "main_event": "核心事件",
+      "synopsis": "本卷梗概(100字以内)",
+      "main_event": "核心事件(50字以内)",
       "emotion_arc": "情感弧线",
-      "chapter_count": 20,
-      "chapters": [
-        {
-          "id": "chap_1_1",
-          "index": 1,
-          "volume_index": 1,
-          "title": "章节名",
-          "synopsis": "章节梗概",
-          "main_event": "核心事件",
-          "characters": "出场人物",
-          "location": "场景地点",
-          "foreshadow": "伏笔设置"
-        }
-      ]
+      "chapter_count": 20
     }
   ]
 }`, synopsis.Synopsis, worldView.PowerSystem, worldView.SocialStructure, synopsis.VolumeCount)
 
 	result, err := s.llmClient.Call(ctx, prompt, "architect")
 	if err != nil {
+		log.Printf("LLM Call error: %v", err)
 		return nil, err
+	}
+
+	log.Printf("LLM result length: %d", len(result))
+	if len(result) > 500 {
+		log.Printf("LLM result first 500 chars: %s...", result[:500])
+	} else {
+		log.Printf("LLM result: %s", result)
 	}
 
 	var data struct {
 		Volumes []VolumeOutline `json:"volumes"`
 	}
 	if err := parseJSON(result, &data); err != nil {
-		return nil, err
+		log.Printf("parseJSON error: %v, raw result length: %d", err, len(result))
+		return nil, fmt.Errorf("JSON解析失败: %w", err)
 	}
 
+	log.Printf("Parsed %d volumes", len(data.Volumes))
 	return data.Volumes, nil
 }
 
 // ExpandChapterDetail 展开章节细纲
 func (s *ArchitectService) ExpandChapterDetail(ctx context.Context, bookName string, chapter *ChapterOutline, worldView *WorldViewGenerateResult) (*ChapterDetail, error) {
+	// 参数验证
+	if chapter == nil {
+		return nil, fmt.Errorf("缺少章节数据")
+	}
+	if worldView == nil {
+		return nil, fmt.Errorf("缺少世界观数据")
+	}
+
 	prompt := fmt.Sprintf(`请为以下章节设计详细细纲。
 
 【章节信息】
@@ -337,6 +353,14 @@ func (s *ArchitectService) ExpandChapterDetail(ctx context.Context, bookName str
 
 // ExpandVolume 展开单个分卷（生成章节）
 func (s *ArchitectService) ExpandVolume(ctx context.Context, volume *VolumeOutline, synopsis *SynopsisResult, worldView *WorldViewGenerateResult) (*VolumeOutline, error) {
+	// 参数验证
+	if volume == nil {
+		return nil, fmt.Errorf("缺少分卷数据")
+	}
+	if synopsis == nil {
+		return nil, fmt.Errorf("缺少总纲数据")
+	}
+
 	prompt := fmt.Sprintf(`请为以下分卷设计详细章节大纲。
 
 【分卷信息】

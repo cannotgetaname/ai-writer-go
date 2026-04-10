@@ -21,7 +21,7 @@ type OpenAIClient struct {
 func NewOpenAIClient(cfg *Config) *OpenAIClient {
 	timeout := cfg.Timeout
 	if timeout == 0 {
-		timeout = 120
+		timeout = 600 // 默认 10 分钟，reasoner 模型需要较长时间思考
 	}
 
 	return &OpenAIClient{
@@ -113,6 +113,7 @@ func (c *OpenAIClient) CallWithSystem(ctx context.Context, systemPrompt, userPro
 		Model:       model,
 		Messages:    messages,
 		Temperature: temp,
+		MaxTokens:   8192, // 足够长的输出，避免被截断
 		Stream:      false,
 	}
 

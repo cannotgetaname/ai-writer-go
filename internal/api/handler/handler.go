@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -475,7 +476,14 @@ func GetWorldView(c *gin.Context) {
 
 	worldview, err := jsonStore.LoadWorldView(bookID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// 文件不存在时返回空结构
+		c.JSON(http.StatusOK, &model.WorldView{
+			BookID: bookID,
+			BasicInfo: model.WorldViewBasic{},
+			CoreSettings: model.WorldViewCore{},
+			KeyElements: model.WorldViewElements{Factions: []model.Faction{}},
+			Background: model.WorldViewBackground{},
+		})
 		return
 	}
 
@@ -2232,6 +2240,7 @@ func ArchitectVolumes(c *gin.Context) {
 
 	volumes, err := svc.GenerateVolumeOutlines(c.Request.Context(), req.BookName, req.Synopsis, req.WorldView)
 	if err != nil {
+		log.Printf("ArchitectVolumes error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -2367,6 +2376,92 @@ func ArchitectStrategies(c *gin.Context) {
 			},
 		},
 	})
+}
+
+// ArchitectGenerate 生成大纲（兼容旧接口）
+func ArchitectGenerate(c *gin.Context) {
+	var req struct {
+		BookName    string `json:"book_name"`
+		Genre       string `json:"genre"`
+		MainChar    string `json:"main_char"`
+		Theme       string `json:"theme"`
+		TargetWords int    `json:"target_words"`
+		VolumeCount int    `json:"volume_count"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Minute)
+	defer cancel()
+
+	result, err := svc.GenerateOutline(ctx, &service.GenerateOutlineRequest{
+		BookName:    req.BookName,
+		Genre:       req.Genre,
+		MainChar:    req.MainChar,
+		Theme:       req.Theme,
+		TargetWords: req.TargetWords,
+		VolumeCount: req.VolumeCount,
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "生成失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// ArchitectFission 分形裂变（兼容旧接口）
+func ArchitectFission(c *gin.Context) {
+	var req struct {
+		BookName       string `json:"book_name"`
+		NodeID         string `json:"node_id"`
+		NodeType       string `json:"node_type"`
+		CurrentOutline string `json:"current_outline"`
+		Strategy       string `json:"strategy"`
+		Count          int    `json:"count"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	llmClient, err := getLLMClient()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "AI服务未配置"})
+		return
+	}
+
+	svc := service.NewArchitectService(llmClient, jsonStore)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Minute)
+	defer cancel()
+
+	result, err := svc.Fission(ctx, &service.FissionRequest{
+		BookName:       req.BookName,
+		NodeID:         req.NodeID,
+		NodeType:       req.NodeType,
+		CurrentOutline: req.CurrentOutline,
+		Strategy:       req.Strategy,
+		Count:          req.Count,
+	})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": "裂变失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ==================== 拆书分析 ====================
@@ -3840,4 +3935,130 @@ func InfoBoundaryExtract(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// ArchitectSaveData 保存架构师数据到书籍元数据
+func ArchitectSaveData(c *gin.Context) {
+	var req struct {
+		BookName       string                            `json:"book_name"`
+		Synopsis       map[string]interface{}            `json:"synopsis,omitempty"`
+		WorldView      map[string]interface{}            `json:"world_view,omitempty"`
+		Volumes        []map[string]interface{}          `json:"volumes,omitempty"`
+		ChapterDetails map[string]map[string]interface{} `json:"chapter_details,omitempty"`
+		CurrentStep    int                               `json:"current_step,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 加载现有元数据
+	meta, err := jsonStore.LoadBookMeta(req.BookName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "加载书籍元数据失败"})
+		return
+	}
+
+	// 更新架构师数据
+	if meta.ArchitectData == nil {
+		meta.ArchitectData = &model.ArchitectData{}
+	}
+
+	// 保存总纲
+	if req.Synopsis != nil {
+		synopsisJSON, _ := json.Marshal(req.Synopsis)
+		var synopsis model.SynopsisJSON
+		if err := json.Unmarshal(synopsisJSON, &synopsis); err == nil {
+			meta.ArchitectData.Synopsis = &synopsis
+		}
+	}
+
+	// 保存世界观
+	if req.WorldView != nil {
+		wvJSON, _ := json.Marshal(req.WorldView)
+		var wv model.WorldViewJSON
+		if err := json.Unmarshal(wvJSON, &wv); err == nil {
+			meta.ArchitectData.WorldView = &wv
+		}
+	}
+
+	// 保存分卷
+	if req.Volumes != nil {
+		volJSON, _ := json.Marshal(req.Volumes)
+		var volumes []model.VolumeJSON
+		if err := json.Unmarshal(volJSON, &volumes); err == nil {
+			meta.ArchitectData.Volumes = volumes
+		}
+	}
+
+	// 保存章节细纲
+	if req.ChapterDetails != nil {
+		if meta.ArchitectData.ChapterDetails == nil {
+			meta.ArchitectData.ChapterDetails = make(map[string]model.ChapterDetailJSON)
+		}
+		for key, detail := range req.ChapterDetails {
+			detailJSON, _ := json.Marshal(detail)
+			var cd model.ChapterDetailJSON
+			if err := json.Unmarshal(detailJSON, &cd); err == nil {
+				meta.ArchitectData.ChapterDetails[key] = cd
+			}
+		}
+	}
+
+	// 保存当前步骤
+	if req.CurrentStep > 0 {
+		meta.ArchitectData.CurrentStep = req.CurrentStep
+	}
+
+	meta.ArchitectData.UpdatedAt = time.Now()
+	meta.UpdatedAt = time.Now()
+
+	// 保存元数据
+	if err := jsonStore.SaveBookMeta(req.BookName, meta); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "架构师数据已保存"})
+}
+
+// ArchitectLoadData 加载架构师数据
+func ArchitectLoadData(c *gin.Context) {
+	bookName := c.Query("book_name")
+	if bookName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book_name required"})
+		return
+	}
+
+	meta, err := jsonStore.LoadBookMeta(bookName)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"synopsis":        nil,
+			"world_view":      nil,
+			"volumes":         nil,
+			"chapter_details": nil,
+			"current_step":    0,
+		})
+		return
+	}
+
+	if meta.ArchitectData == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"synopsis":        nil,
+			"world_view":      nil,
+			"volumes":         nil,
+			"chapter_details": nil,
+			"current_step":    0,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"synopsis":        meta.ArchitectData.Synopsis,
+		"world_view":      meta.ArchitectData.WorldView,
+		"volumes":         meta.ArchitectData.Volumes,
+		"chapter_details": meta.ArchitectData.ChapterDetails,
+		"current_step":    meta.ArchitectData.CurrentStep,
+		"updated_at":      meta.ArchitectData.UpdatedAt,
+	})
 }

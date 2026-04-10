@@ -22,6 +22,9 @@ type Item struct {
 
 	// 归属历史
 	OwnerHistory []ItemOwnerChange `json:"owner_history,omitempty"`
+
+	// 自定义属性
+	CustomAttributes map[string]string `json:"custom_attributes,omitempty"`
 }
 
 // ItemOwnerChange 物品归属变更记录
@@ -43,4 +46,7 @@ type Location struct {
 	Description string   `json:"description"`
 	Faction     string   `json:"faction,omitempty"` // 所属势力
 	Danger      string   `json:"danger,omitempty"`  // 危险等级
+
+	// 自定义属性
+	CustomAttributes map[string]string `json:"custom_attributes,omitempty"`
 }

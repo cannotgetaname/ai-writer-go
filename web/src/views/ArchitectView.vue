@@ -28,18 +28,19 @@
       </div>
 
       <!-- Right Workspace -->
-      <ArchitectWorkspace
-        :step-index="currentStep"
-        :title="steps[currentStep].title"
-        :description="steps[currentStep].description"
-        :context-preview="getContextPreview()"
-        :is-outdated="outdatedSteps.has(currentStep)"
-        :outdated-message="getOutdatedMessage()"
-        :loading="loading"
-        :loading-text="loadingText"
-        @regenerate="handleRegenerate"
-        @cancel="cancelGeneration"
-      >
+      <div class="workspace-container">
+        <ArchitectWorkspace
+          :step-index="currentStep"
+          :title="steps[currentStep].title"
+          :description="steps[currentStep].description"
+          :context-preview="getContextPreview()"
+          :is-outdated="outdatedSteps.has(currentStep)"
+          :outdated-message="getOutdatedMessage()"
+          :loading="loading"
+          :loading-text="loadingText"
+          @regenerate="handleRegenerate"
+          @cancel="cancelGeneration"
+        >
         <!-- Action Buttons Slot -->
         <template #actions>
           <slot name="actions">
@@ -530,6 +531,7 @@
           </div>
         </template>
       </ArchitectWorkspace>
+      </div>
     </div>
   </div>
 </template>
@@ -1179,8 +1181,13 @@ onMounted(() => {
 }
 
 .sidebar {
-  width: 320px;
+  width: 280px;
   flex-shrink: 0;
+}
+
+.workspace-container {
+  flex: 1;
+  min-width: 800px;
 }
 
 /* Step Content Styles */
@@ -1391,6 +1398,16 @@ onMounted(() => {
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 240px;
+  }
+
+  .workspace-container {
+    min-width: 600px;
+  }
+}
+
 @media (max-width: 1024px) {
   .architect-layout {
     flex-direction: column;
@@ -1398,6 +1415,10 @@ onMounted(() => {
 
   .sidebar {
     width: 100%;
+  }
+
+  .workspace-container {
+    min-width: 100%;
   }
 }
 </style>
