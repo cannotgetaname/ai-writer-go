@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -59,12 +60,17 @@ func ReplaceFiles(extractDir string, targetDir string) error {
 			continue // 源文件不存在，跳过
 		}
 
-		// 删除旧文件
-		os.Remove(destPath)
-
-		// 复制新文件
-		if err := copyFile(srcPath, destPath); err != nil {
-			return fmt.Errorf("replace failed for %s: %w", file, err)
+		// Windows 特殊处理：使用 rename 策略
+		if runtime.GOOS == "windows" && strings.HasSuffix(file, ".exe") {
+			if err := replaceFileWindows(destPath, srcPath); err != nil {
+				return fmt.Errorf("replace failed for %s: %w", file, err)
+			}
+		} else {
+			// 非 Windows 或非 exe 文件：直接删除并复制
+			os.Remove(destPath)
+			if err := copyFile(srcPath, destPath); err != nil {
+				return fmt.Errorf("replace failed for %s: %w", file, err)
+			}
 		}
 
 		// 保持可执行权限
@@ -92,7 +98,58 @@ func ReplaceFiles(extractDir string, targetDir string) error {
 		copyFile(srcReadme, destReadme)
 	}
 
+	// 7. 清理旧的 .old 文件（上次更新遗留）
+	cleanupOldFiles(targetDir)
+
 	return nil
+}
+
+// replaceFileWindows Windows 上替换正在运行的 exe 文件
+// 使用 rename 策略：先重命名为 .old，再复制新文件
+// Windows 允许重命名正在运行的文件，但不允许删除
+func replaceFileWindows(destPath string, srcPath string) error {
+	// 先尝试直接删除（如果文件没有被占用）
+	err := os.Remove(destPath)
+	if err == nil {
+		// 成功删除，直接复制
+		return copyFile(srcPath, destPath)
+	}
+
+	// 删除失败，使用 rename 策略
+	oldPath := destPath + ".old"
+
+	// 删除可能存在的旧 .old 文件
+	os.Remove(oldPath)
+
+	// 重命名当前文件为 .old
+	// Windows 允许重命名正在运行的 exe
+	err = os.Rename(destPath, oldPath)
+	if err != nil {
+		return fmt.Errorf("cannot rename old file: %w (file may be locked)", err)
+	}
+
+	// 复制新文件
+	if err := copyFile(srcPath, destPath); err != nil {
+		// 复制失败，尝试恢复旧文件
+		os.Rename(oldPath, destPath)
+		return fmt.Errorf("cannot copy new file: %w", err)
+	}
+
+	fmt.Printf("Note: Old file renamed to %s (will be cleaned on next update)\n", filepath.Base(oldPath))
+	return nil
+}
+
+// cleanupOldFiles 清理上次更新遗留的 .old 文件
+func cleanupOldFiles(targetDir string) {
+	for _, file := range replaceFiles {
+		oldPath := filepath.Join(targetDir, file + ".old")
+		if _, err := os.Stat(oldPath); err == nil {
+			// 尝试删除，如果失败则跳过（可能仍在被旧进程使用）
+			if err := os.Remove(oldPath); err == nil {
+				fmt.Printf("Cleaned up: %s\n", filepath.Base(oldPath))
+			}
+		}
+	}
 }
 
 // findExtractedSubDir 找到解压后的子目录

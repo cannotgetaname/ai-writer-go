@@ -93,9 +93,10 @@
             <el-table-column prop="title" label="标题" />
             <el-table-column prop="outline" label="大纲" show-overflow-tooltip />
             <el-table-column prop="word_count" label="字数" width="100" />
-            <el-table-column label="操作">
+            <el-table-column label="操作" width="120">
               <template #default="{ row }">
                 <el-button size="small" @click="openChapter(row.id)">查看</el-button>
+                <el-button size="small" type="danger" @click="deleteChapter(row.id)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -186,8 +187,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { bookApi, exportApi, vectorApi } from '@/api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { bookApi, chapterApi, exportApi, vectorApi } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -270,6 +271,23 @@ const exportBook = (format) => {
 
 const openChapter = (chapterId) => {
   router.push(`/books/${bookId.value}/write?chapter=${chapterId}`)
+}
+
+const deleteChapter = async (chapterId) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这个章节吗？删除后无法恢复。', '删除确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await chapterApi.delete(bookId.value, chapterId)
+    ElMessage.success('章节删除成功')
+    loadBook() // 刷新列表
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败: ' + (error.response?.data?.error || error.message))
+    }
+  }
 }
 
 const indexBook = async () => {
