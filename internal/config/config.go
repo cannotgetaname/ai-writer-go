@@ -8,6 +8,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Version 当前版本号
+const Version = "1.4.2"
+
 // Config 应用配置
 type Config struct {
 	Server       ServerConfig       `mapstructure:"server"`
@@ -16,10 +19,20 @@ type Config struct {
 	Storage      StorageConfig      `mapstructure:"storage"`
 	VectorStore  VectorStoreConfig  `mapstructure:"vector_store"`
 	VectorDB     VectorDBConfig     `mapstructure:"vectordb"`
+	Update       UpdateConfig       `mapstructure:"update"`
 	Prompts      PromptsConfig      `mapstructure:"prompts"`
 	Models       ModelsConfig       `mapstructure:"models"`
 	Pricing      PricingConfig      `mapstructure:"pricing"`
 	LastOpenBook string             `mapstructure:"last_open_book"`
+}
+
+// UpdateConfig 更新配置
+type UpdateConfig struct {
+	Source        string `mapstructure:"source"`         // github/gitee/auto
+	GitHubRepo    string `mapstructure:"github_repo"`    // GitHub 仓库路径
+	GiteeRepo     string `mapstructure:"gitee_repo"`     // Gitee 仓库路径
+	AutoCheck     bool   `mapstructure:"auto_check"`     // 启动时自动检查
+	CheckInterval int    `mapstructure:"check_interval"` // 检查间隔（小时）
 }
 
 // ServerConfig 服务器配置
@@ -150,6 +163,13 @@ var defaultConfig = Config{
 		Provider: "sqlite-vec",
 		BaseURL:  "",
 	},
+		Update: UpdateConfig{
+			Source:        "auto",
+			GitHubRepo:    "cannotgetaname/ai-writer-go",
+			GiteeRepo:     "cannotgetaname/ai-writer-go",
+			AutoCheck:     true,
+			CheckInterval: 24,
+		},
 	Prompts: PromptsConfig{
 		WriterSystem: `你是一个顶级网文作家，擅长热血、快节奏、爽点密集的风格。写作要求：
 1. 【黄金法则】多用"展示"而非"讲述"（Show, don't tell）。
