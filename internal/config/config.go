@@ -173,7 +173,7 @@ var defaultConfig = Config{
 		Update: UpdateConfig{
 			Source:        "auto",
 			GitHubRepo:    "cannotgetaname/ai-writer-go",
-			GiteeRepo:     "cannotgetaname/ai-writer-go",
+			GiteeRepo:     "old_big_grandpas/ai-writer-go",
 			AutoCheck:     true,
 			CheckInterval: 24,
 		},
