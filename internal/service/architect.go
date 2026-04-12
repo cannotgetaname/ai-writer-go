@@ -194,19 +194,22 @@ func (s *ArchitectService) GenerateWorldView(ctx context.Context, req *WorldView
 5. 重要物品和地点
 6. 历史背景和主要矛盾
 
-请严格按JSON格式输出：
+【重要】请只输出JSON，不要有任何开场白、解释或结尾总结。
+【重要】所有字段必须是字符串类型，不要使用嵌套对象或数组。
+
+直接输出以下格式的JSON：
 {
   "genre": "题材",
-  "era": "时代背景",
-  "tech_level": "科技水平",
-  "power_system": "力量体系详细描述",
-  "social_structure": "社会结构和主要势力",
-  "special_rules": "特殊规则",
-  "important_items": "重要物品",
-  "organizations": "主要势力组织",
-  "locations": "主要地点",
-  "history": "历史背景",
-  "main_conflict": "主要矛盾",
+  "era": "时代背景（如：古代仙侠世界）",
+  "tech_level": "科技水平（如：原始农耕、蒸汽朋克等）",
+  "power_system": "力量体系描述（修炼等级、能力类型等，用一段文字描述）",
+  "social_structure": "社会结构和主要势力分布描述",
+  "special_rules": "这个世界独有的特殊规则和法则",
+  "important_items": "重要物品和法宝描述",
+  "organizations": "主要势力组织名称和简介",
+  "locations": "主要地点和场景描述",
+  "history": "历史背景概述",
+  "main_conflict": "主要矛盾冲突点",
   "development": "世界发展趋势"
 }`, req.Genre, req.Theme, req.Synopsis)
 
@@ -215,10 +218,27 @@ func (s *ArchitectService) GenerateWorldView(ctx context.Context, req *WorldView
 		return nil, err
 	}
 
+	log.Printf("GenerateWorldView LLM result length: %d", len(result))
+	if len(result) > 500 {
+		log.Printf("GenerateWorldView LLM result first 500 chars: %s", result[:500])
+	}
+
 	var worldView WorldViewGenerateResult
 	if err := parseJSON(result, &worldView); err != nil {
+		log.Printf("GenerateWorldView parseJSON failed: %v", err)
+		// 尝试逐字段提取
 		worldView.Genre = req.Genre
-		worldView.PowerSystem = result
+		worldView.Era = extractJSONValue(result, "era")
+		worldView.TechLevel = extractJSONValue(result, "tech_level")
+		worldView.PowerSystem = extractJSONValue(result, "power_system")
+		worldView.SocialStructure = extractJSONValue(result, "social_structure")
+		worldView.SpecialRules = extractJSONValue(result, "special_rules")
+		worldView.ImportantItems = extractJSONValue(result, "important_items")
+		worldView.Organizations = extractJSONValue(result, "organizations")
+		worldView.Locations = extractJSONValue(result, "locations")
+		worldView.History = extractJSONValue(result, "history")
+		worldView.MainConflict = extractJSONValue(result, "main_conflict")
+		worldView.Development = extractJSONValue(result, "development")
 	}
 
 	return &worldView, nil
@@ -770,11 +790,59 @@ func extractJSONValue(s string, key string) string {
 		rest = rest[1:]
 	}
 
-	// 如果是字符串
-	if len(rest) > 0 && rest[0] == '"' {
+	if len(rest) == 0 {
+		return ""
+	}
+
+	// 根据值的类型提取
+	firstChar := rest[0]
+
+	switch firstChar {
+	case '"':
+		// 字符串值：提取到下一个引号
 		endIdx := indexOf(rest[1:], `"`)
 		if endIdx != -1 {
 			return rest[1 : endIdx+1]
+		}
+	case '{':
+		// 嵌套对象：提取整个对象并转为字符串
+		depth := 1
+		i := 1
+		for i < len(rest) && depth > 0 {
+			if rest[i] == '{' {
+				depth++
+			} else if rest[i] == '}' {
+				depth--
+			}
+			i++
+		}
+		if depth == 0 {
+			return rest[:i] // 返回整个嵌套对象作为字符串
+		}
+	case '[':
+		// 数组：提取整个数组并转为字符串
+		depth := 1
+		i := 1
+		for i < len(rest) && depth > 0 {
+			if rest[i] == '[' {
+				depth++
+			} else if rest[i] == ']' {
+				depth--
+			}
+			i++
+		}
+		if depth == 0 {
+			return rest[:i] // 返回整个数组作为字符串
+		}
+	default:
+		// 数字、布尔等：提取到逗号或结束
+		endChars := ",}\n"
+		for i := 0; i < len(rest); i++ {
+			for _, ec := range endChars {
+				if rest[i] == byte(ec) {
+					return rest[:i]
+				}
+			}
 		}
 	}
 
