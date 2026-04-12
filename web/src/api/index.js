@@ -210,7 +210,11 @@ export const systemApi = {
   getBilling: () => api.get('/system/billing'),
   getGoals: () => api.get('/system/goals'),
   updateGoals: (data) => api.put('/system/goals', data),
-  getOllamaModels: (baseUrl) => api.get(`/system/ollama/models?base_url=${encodeURIComponent(baseUrl || 'http://localhost:11434')}`)
+  getOllamaModels: (baseUrl) => api.get(`/system/ollama/models?base_url=${encodeURIComponent(baseUrl || 'http://localhost:11434')}`),
+  // 更新相关
+  getVersion: () => api.get('/system/version'),
+  checkUpdate: (source = 'auto') => api.post('/system/update/check', { source }),
+  startUpdate: (data) => api.post('/system/update/start', data)
 }
 
 // 向量存储
