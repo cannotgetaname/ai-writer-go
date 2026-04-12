@@ -97,8 +97,8 @@
 
       <!-- Right: Outline + Review -->
       <div class="right-panel" v-if="currentChapter">
-        <!-- Chapter Outline -->
-        <div class="info-card">
+        <!-- Chapter Outline (simple mode) -->
+        <div class="info-card" v-if="!isDetailOutline">
           <div class="card-title">章节大纲</div>
           <el-input
             v-model="currentChapter.outline"
@@ -106,6 +106,62 @@
             :rows="4"
             placeholder="章节大纲..."
           />
+        </div>
+
+        <!-- Chapter Detail Outline (from architect) -->
+        <div class="info-card detail-outline-card" v-if="isDetailOutline">
+          <div class="card-header">
+            <span class="card-title">章节细纲</span>
+            <el-button size="small" text @click="toggleDetailExpand">
+              {{ detailExpanded ? '折叠' : '展开' }}
+            </el-button>
+          </div>
+          <div class="detail-outline-content" v-if="detailExpanded">
+            <!-- Scenes -->
+            <div v-if="parsedDetail.scenes && parsedDetail.scenes.length > 0" class="detail-section">
+              <h5>场景设计</h5>
+              <el-timeline>
+                <el-timeline-item
+                  v-for="(scene, idx) in parsedDetail.scenes"
+                  :key="idx"
+                  size="small"
+                >
+                  <div class="scene-item">
+                    <p><strong>地点：</strong>{{ scene.location }}</p>
+                    <p><strong>人物：</strong>{{ scene.characters }}</p>
+                    <p><strong>事件：</strong>{{ scene.event }}</p>
+                    <p><strong>氛围：</strong>{{ scene.mood }}</p>
+                  </div>
+                </el-timeline-item>
+              </el-timeline>
+            </div>
+            <!-- Dialogues -->
+            <div v-if="parsedDetail.dialogues && parsedDetail.dialogues.length > 0" class="detail-section">
+              <h5>关键对话</h5>
+              <ul class="detail-list">
+                <li v-for="(d, idx) in parsedDetail.dialogues" :key="idx">{{ d }}</li>
+              </ul>
+            </div>
+            <!-- Actions -->
+            <div v-if="parsedDetail.actions && parsedDetail.actions.length > 0" class="detail-section">
+              <h5>动作设计</h5>
+              <ul class="detail-list">
+                <li v-for="(a, idx) in parsedDetail.actions" :key="idx">{{ a }}</li>
+              </ul>
+            </div>
+            <!-- Foreshadows -->
+            <div v-if="parsedDetail.foreshadows && parsedDetail.foreshadows.length > 0" class="detail-section">
+              <h5>伏笔设置</h5>
+              <ul class="detail-list">
+                <li v-for="(f, idx) in parsedDetail.foreshadows" :key="idx">{{ f }}</li>
+              </ul>
+            </div>
+            <!-- Word Target -->
+            <div v-if="parsedDetail.word_target" class="detail-section">
+              <h5>目标字数</h5>
+              <el-tag>{{ parsedDetail.word_target }} 字</el-tag>
+            </div>
+          </div>
         </div>
 
         <!-- World Audit Button -->
@@ -394,6 +450,86 @@ const editParagraphIndex = ref(-1)
 
 // 世界状态审计对话框
 const worldAuditDialogVisible = ref(false)
+
+// 章节细纲展开状态
+const detailExpanded = ref(true)
+
+// 检测是否是细纲格式（从架构师导入）
+const isDetailOutline = computed(() => {
+  if (!currentChapter.value?.outline) return false
+  return currentChapter.value.outline.includes('【场景设计】') ||
+         currentChapter.value.outline.includes('【章节：')
+})
+
+// 解析细纲内容
+const parsedDetail = computed(() => {
+  if (!currentChapter.value?.outline) return {}
+
+  const outline = currentChapter.value.outline
+  const result = {
+    scenes: [],
+    dialogues: [],
+    actions: [],
+    foreshadows: [],
+    emotions: [],
+    word_target: null
+  }
+
+  // 解析场景
+  const sceneMatch = outline.match(/【场景设计】\n([\s\S]*?)(?=\n【|$)/)
+  if (sceneMatch) {
+    const sceneText = sceneMatch[1]
+    const sceneBlocks = sceneText.split(/场景\d+:/).filter(s => s.trim())
+    sceneBlocks.forEach(block => {
+      const locationMatch = block.match(/地点[：:]\s*(.+)/)
+      const charactersMatch = block.match(/人物[：:]\s*(.+)/)
+      const eventMatch = block.match(/事件[：:]\s*(.+)/)
+      const moodMatch = block.match(/氛围[：:]\s*(.+)/)
+      result.scenes.push({
+        location: locationMatch?.[1]?.trim() || '',
+        characters: charactersMatch?.[1]?.trim() || '',
+        event: eventMatch?.[1]?.trim() || '',
+        mood: moodMatch?.[1]?.trim() || ''
+      })
+    })
+  }
+
+  // 解析对话
+  const dialogueMatch = outline.match(/【关键对话】\n([\s\S]*?)(?=\n【|$)/)
+  if (dialogueMatch) {
+    result.dialogues = dialogueMatch[1].split('\n').filter(d => d.trim() && d.startsWith('-')).map(d => d.replace(/^-\s*/, '').trim())
+  }
+
+  // 解析动作
+  const actionMatch = outline.match(/【动作设计】\n([\s\S]*?)(?=\n【|$)/)
+  if (actionMatch) {
+    result.actions = actionMatch[1].split('\n').filter(a => a.trim() && a.startsWith('-')).map(a => a.replace(/^-\s*/, '').trim())
+  }
+
+  // 解析伏笔
+  const foreshadowMatch = outline.match(/【伏笔设置】\n([\s\S]*?)(?=\n【|$)/)
+  if (foreshadowMatch) {
+    result.foreshadows = foreshadowMatch[1].split('\n').filter(f => f.trim() && f.startsWith('-')).map(f => f.replace(/^-\s*/, '').trim())
+  }
+
+  // 解析情感
+  const emotionMatch = outline.match(/【情感变化】\n([\s\S]*?)(?=\n【|$)/)
+  if (emotionMatch) {
+    result.emotions = emotionMatch[1].split('\n').filter(e => e.trim() && e.startsWith('-')).map(e => e.replace(/^-\s*/, '').trim())
+  }
+
+  // 解析目标字数
+  const wordMatch = outline.match(/【目标字数】(\d+)字/)
+  if (wordMatch) {
+    result.word_target = parseInt(wordMatch[1])
+  }
+
+  return result
+})
+
+const toggleDetailExpand = () => {
+  detailExpanded.value = !detailExpanded.value
+}
 
 const goBack = () => {
   router.push(`/books/${bookId.value}`)
@@ -981,6 +1117,52 @@ onMounted(() => {
 .review-card {
   max-height: 400px;
   overflow-y: auto;
+}
+
+/* Detail outline card */
+.detail-outline-card {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.detail-outline-content {
+  margin-top: 8px;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section h5 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin: 0 0 8px 0;
+}
+
+.scene-item {
+  padding: 8px 12px;
+  background: #f5f5f7;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.scene-item p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.detail-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.detail-list li {
+  margin: 6px 0;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.8);
+  line-height: 1.5;
 }
 
 .review-score {
