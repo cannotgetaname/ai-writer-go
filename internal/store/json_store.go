@@ -16,7 +16,7 @@ import (
 )
 
 // validName 验证名称是否合法（防止路径注入）
-// 只允许字母、数字、中文、下划线、横杠，禁止路径遍历字符
+// 只允许字母、数字、中文、下划线、横杠、空格，禁止路径遍历字符
 func validName(name string) bool {
 	if name == "" || len(name) > 100 {
 		return false
@@ -26,7 +26,8 @@ func validName(name string) bool {
 		return false
 	}
 	for _, r := range name {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' {
+		// 允许：字母、数字、空格、下划线、横杠
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' && r != ' ' {
 			return false
 		}
 	}
@@ -112,7 +113,7 @@ func (s *JSONStore) CreateBook(name string) (*model.BookMeta, error) {
 
 	// 验证书名防止路径注入
 	if !validName(name) {
-		return nil, fmt.Errorf("书名不合法: %s (只允许字母、数字、中文、下划线、横杠，长度1-100)", name)
+		return nil, fmt.Errorf("书名不合法: %s (只允许字母、数字、中文、空格、下划线、横杠，长度1-100)", name)
 	}
 
 	bookPath := filepath.Join(s.basePath, "projects", name)

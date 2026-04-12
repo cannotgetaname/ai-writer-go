@@ -837,7 +837,8 @@ const generateWorldView = async () => {
       theme: synopsisResult.value.theme,
       synopsis: synopsisResult.value.synopsis
     })
-    if (res.data?.power_system) {
+    // 更宽松的检查条件：只要有返回数据就更新
+    if (res.data && Object.keys(res.data).length > 0) {
       worldViewResult.value = res.data
       currentStep.value = 2
       clearOutdated(1)
@@ -845,9 +846,10 @@ const generateWorldView = async () => {
       await saveArchitectData()
       ElMessage.success('世界观生成成功')
     } else {
-      ElMessage.warning(res.data?.message || '生成失败')
+      ElMessage.warning(res.data?.message || '生成失败，返回数据为空')
     }
   } catch (error) {
+    console.error('generateWorldView error:', error)
     ElMessage.error('生成失败: ' + (error.response?.data?.error || error.message))
   }
   loading.value = false
@@ -903,14 +905,25 @@ const expandVolume = async () => {
   loadingText.value = `正在展开《${volumeResults.value[selectedVolumeIndex.value].title}》...`
   try {
     const vol = volumeResults.value[selectedVolumeIndex.value]
+    console.log('expandVolume request:', {
+      book_name: bookName.value,
+      volume: vol,
+      synopsis: synopsisResult.value,
+      world_view: worldViewResult.value
+    })
     const res = await architectApi.expandVolume({
       book_name: bookName.value,
       volume: vol,
       synopsis: synopsisResult.value,
       world_view: worldViewResult.value
     })
-    if (res.data?.chapters) {
-      volumeResults.value[selectedVolumeIndex.value].chapters = res.data.chapters
+    console.log('expandVolume response:', res.data)
+    // 检查返回数据，可能是 chapters 数组也可能是 Chapters（大写）
+    const chapters = res.data?.chapters || res.data?.Chapters
+    if (chapters && chapters.length > 0) {
+      // 使用 Vue.set 或 splice 来确保响应式更新
+      const newVolume = { ...vol, chapters: chapters }
+      volumeResults.value.splice(selectedVolumeIndex.value, 1, newVolume)
       clearOutdated(3)
       await saveArchitectData()
 
@@ -919,10 +932,14 @@ const expandVolume = async () => {
         currentStep.value = 4
         ElMessage.success('所有分卷已展开，进入章节细纲阶段')
       } else {
-        ElMessage.success('章节展开成功')
+        ElMessage.success(`展开成功，共${chapters.length}章`)
       }
+    } else {
+      console.warn('expandVolume: no chapters returned', res.data)
+      ElMessage.warning('展开失败：返回数据中没有章节')
     }
   } catch (error) {
+    console.error('expandVolume error:', error)
     ElMessage.error('展开失败: ' + (error.response?.data?.error || error.message))
   }
   loading.value = false
@@ -948,8 +965,11 @@ const expandAllVolumes = async () => {
           synopsis: synopsisResult.value,
           world_view: worldViewResult.value
         })
-        if (res.data?.chapters) {
-          volumeResults.value[i].chapters = res.data.chapters
+        const chapters = res.data?.chapters || res.data?.Chapters
+        if (chapters && chapters.length > 0) {
+          // 使用 splice 确保响应式更新
+          const newVolume = { ...vol, chapters: chapters }
+          volumeResults.value.splice(i, 1, newVolume)
         }
       }
     }
@@ -958,6 +978,7 @@ const expandAllVolumes = async () => {
     await saveArchitectData()
     ElMessage.success('全部分卷展开完成，进入章节细纲阶段')
   } catch (error) {
+    console.error('expandAllVolumes error:', error)
     ElMessage.error('展开失败: ' + (error.response?.data?.error || error.message))
   }
   loading.value = false
@@ -1018,6 +1039,10 @@ const viewChapterDetail = (key) => {
 // Save worldview to book settings
 const saveWorldView = async () => {
   if (!worldViewResult.value) return
+  if (!bookName.value) {
+    ElMessage.error('请先选择一本书籍')
+    return
+  }
   try {
     await architectApi.saveWorldView({
       book_name: bookName.value,
@@ -1046,6 +1071,10 @@ const toggleChapterList = (idx) => {
 // Save outline as chapters
 const saveOutline = async () => {
   if (volumeResults.value.length === 0) return
+  if (!bookName.value) {
+    ElMessage.error('请先选择一本书籍')
+    return
+  }
   try {
     await architectApi.saveOutline({
       book_name: bookName.value,
@@ -1059,6 +1088,7 @@ const saveOutline = async () => {
 
 // Save architect data with persistence
 const saveArchitectData = async () => {
+  if (!bookName.value) return // 静默跳过，不提示
   try {
     await architectApi.saveData({
       book_name: bookName.value,
@@ -1076,6 +1106,7 @@ const saveArchitectData = async () => {
 
 // Load architect data from persistence
 const loadArchitectData = async () => {
+  if (!bookName.value) return // 静默跳过
   try {
     const res = await architectApi.loadData(bookName.value)
     if (res.data) {
@@ -1141,6 +1172,12 @@ watch(
 
 // Initialize on mount
 onMounted(() => {
+  // 检查 bookName 是否有效
+  if (!bookName.value) {
+    ElMessage.warning('请先从书籍列表选择一本书籍')
+    router.push('/books')
+    return
+  }
   loadArchitectData()
 })
 </script>

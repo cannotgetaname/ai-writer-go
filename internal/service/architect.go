@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"ai-writer/internal/llm"
@@ -317,7 +318,7 @@ func (s *ArchitectService) ExpandChapterDetail(ctx context.Context, bookName str
 5. 伏笔设置
 6. 目标字数
 
-请严格按JSON格式输出：
+【重要】请只输出JSON，不要有任何开场白、解释或结尾总结。直接输出以下格式的JSON：
 {
   "chapter_id": "%s",
   "scenes": [
@@ -344,8 +345,8 @@ func (s *ArchitectService) ExpandChapterDetail(ctx context.Context, bookName str
 
 	var detail ChapterDetail
 	if err := parseJSON(result, &detail); err != nil {
-		detail.ChapterID = chapter.ID
-		detail.WordTarget = 3000
+		log.Printf("ExpandChapterDetail parseJSON failed: %v, raw result: %s", err, result[:min(500, len(result))])
+		return nil, fmt.Errorf("JSON解析失败，请重试。LLM返回内容: %s", result[:min(200, len(result))])
 	}
 
 	return &detail, nil
@@ -361,6 +362,7 @@ func (s *ArchitectService) ExpandVolume(ctx context.Context, volume *VolumeOutli
 		return nil, fmt.Errorf("缺少总纲数据")
 	}
 
+	// 使用更明确的JSON格式提示
 	prompt := fmt.Sprintf(`请为以下分卷设计详细章节大纲。
 
 【分卷信息】
@@ -372,7 +374,12 @@ func (s *ArchitectService) ExpandVolume(ctx context.Context, volume *VolumeOutli
 【全书背景】
 %s
 
-请设计每一章的大纲，严格按JSON格式输出：
+请设计每一章的大纲。要求：
+1. 只输出纯JSON，不要包含任何Markdown标记或额外说明
+2. 不要使用代码块格式
+3. 章节数量约为%d章
+
+输出格式：
 {
   "chapters": [
     {
@@ -380,7 +387,7 @@ func (s *ArchitectService) ExpandVolume(ctx context.Context, volume *VolumeOutli
       "index": 1,
       "volume_index": %d,
       "title": "章节名",
-      "synopsis": "章节梗概(50字以内)",
+      "synopsis": "章节梗概",
       "main_event": "核心事件",
       "characters": "出场人物",
       "location": "场景",
@@ -388,20 +395,28 @@ func (s *ArchitectService) ExpandVolume(ctx context.Context, volume *VolumeOutli
     }
   ]
 }`, volume.Title, volume.Synopsis, volume.MainEvent, volume.ChapterCount,
-		synopsis.Synopsis, volume.Index, volume.Index)
+		synopsis.Synopsis, volume.ChapterCount, volume.Index, volume.Index)
 
 	result, err := s.llmClient.Call(ctx, prompt, "architect")
 	if err != nil {
 		return nil, err
 	}
 
+	log.Printf("ExpandVolume LLM result length: %d", len(result))
+	if len(result) > 300 {
+		log.Printf("ExpandVolume LLM result first 300 chars: %s", result[:300])
+	} else {
+		log.Printf("ExpandVolume LLM result: %s", result)
+	}
+
 	var data struct {
 		Chapters []ChapterOutline `json:"chapters"`
 	}
 	if err := parseJSON(result, &data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("解析章节大纲失败: %w", err)
 	}
 
+	log.Printf("ExpandVolume parsed %d chapters", len(data.Chapters))
 	volume.Chapters = data.Chapters
 	return volume, nil
 }
@@ -679,13 +694,41 @@ func (s *ArchitectService) AnalyzeStructure(ctx context.Context, bookName string
 // ==================== 辅助函数 ====================
 
 func parseJSON(s string, v interface{}) error {
+	// 先清理Markdown代码块标记
+	s = strings.ReplaceAll(s, "```json", "")
+	s = strings.ReplaceAll(s, "```", "")
+
+	// 尝试直接解析
+	err := json.Unmarshal([]byte(s), v)
+	if err == nil {
+		return nil
+	}
+
+	// 如果直接解析失败，尝试提取JSON块
 	start := indexOf(s, "{")
 	end := lastIndexOf(s, "}")
-	if start == -1 || end == -1 {
-		return fmt.Errorf("no JSON found")
+	if start == -1 || end == -1 || end <= start {
+		return fmt.Errorf("no JSON found in response: %s", s[:min(200, len(s))])
 	}
+
 	jsonStr := s[start : end+1]
-	return json.Unmarshal([]byte(jsonStr), v)
+
+	// 再次尝试解析
+	err = json.Unmarshal([]byte(jsonStr), v)
+	if err != nil {
+		// 记录原始内容用于调试
+		log.Printf("parseJSON failed: %v, jsonStr length: %d, first 300 chars: %s", err, len(jsonStr), jsonStr[:min(300, len(jsonStr))])
+		return fmt.Errorf("JSON parse error: %w", err)
+	}
+
+	return nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func indexOf(s string, substr string) int {

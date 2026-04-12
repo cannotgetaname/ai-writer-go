@@ -30,6 +30,7 @@ var billingStore *store.BillingStore
 var cfg *config.Config
 
 // validBookName 验证书名是否合法（防止路径注入）
+// 允许字母、数字、中文、空格、下划线、横杠
 func validBookName(name string) bool {
 	if name == "" || len(name) > 100 {
 		return false
@@ -39,7 +40,7 @@ func validBookName(name string) bool {
 		return false
 	}
 	for _, r := range name {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' && r != ' ' {
 			return false
 		}
 	}
