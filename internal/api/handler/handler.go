@@ -2584,10 +2584,12 @@ func GetConfig(c *gin.Context) {
 			"projects_dir": cfg.Storage.ProjectsDir,
 			"vector_db_dir": cfg.Storage.VectorDBDir,
 		},
-		"embedding": map[string]string{
-			"provider": cfg.Embedding.Provider,
-			"model":    cfg.Embedding.Model,
-			"base_url": cfg.Embedding.BaseURL,
+		"embedding": map[string]interface{}{
+			"provider":    cfg.Embedding.Provider,
+			"model":       cfg.Embedding.Model,
+			"base_url":    cfg.Embedding.BaseURL,
+			"api_key":     "", // 不返回实际 key，前端用空字符串作为占位
+			"api_key_set": cfg.Embedding.APIKey != "",
 		},
 		"pricing": cfg.Pricing,
 	}
