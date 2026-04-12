@@ -57,7 +57,11 @@ build_package() {
     # 编译 Go 后端
     echo "  Building Go backend..."
     cd "$PROJECT_ROOT"
-    CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "$OUTPUT_DIR/ai-writer${BINARY_EXT}" . 2>/dev/null
+    CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w -X 'main.Version=$VERSION'" -o "$OUTPUT_DIR/ai-writer${BINARY_EXT}" . 2>/dev/null
+
+    # 编译 Updater
+    echo "  Building Updater..."
+    CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "$OUTPUT_DIR/updater${BINARY_EXT}" ./cmd/updater 2>/dev/null
 
     # 编译 Rust embedding 服务
     echo "  Building Rust embedding service..."

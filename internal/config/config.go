@@ -8,8 +8,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Version 当前版本号
-const Version = "1.4.2"
+// Version 当前版本号（可通过 SetVersion 设置）
+var Version = "1.4.2"
+
+// SetVersion 设置版本号（用于 ldflags 注入）
+func SetVersion(v string) {
+	if v != "" && v != "dev" {
+		Version = v
+	}
+}
 
 // Config 应用配置
 type Config struct {
