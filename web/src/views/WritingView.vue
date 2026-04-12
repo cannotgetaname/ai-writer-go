@@ -1,123 +1,134 @@
 <template>
   <div class="writing-view">
+    <!-- Header -->
     <div class="page-header">
-      <el-button @click="goBack">
+      <el-button link class="back-link" @click="goBack">
         <el-icon><ArrowLeft /></el-icon>
         返回
       </el-button>
-      <h2>{{ bookId }} - AI 写作</h2>
+      <h2 class="page-title">{{ bookId }} - AI 写作</h2>
       <div class="header-actions">
-        <el-button @click="showParagraphDialog">
+        <el-button round @click="showParagraphDialog">
           <el-icon><List /></el-icon>
           段落管理
         </el-button>
-        <el-button type="primary" @click="showGenerateDialog">
-          <el-icon><MagicStick /></el-icon>
-          AI 生成
-        </el-button>
-        <el-button type="success" @click="showContinueDialog">
-          <el-icon><Plus /></el-icon>
-          续写
-        </el-button>
-        <el-button type="warning" @click="review" :loading="reviewing">
-          <el-icon><DocumentChecked /></el-icon>
-          审稿
-        </el-button>
-        <el-button type="info" @click="showWorldAuditDialog" :disabled="!currentChapter">
-          <el-icon><DataAnalysis /></el-icon>
-          审计世界状态
-        </el-button>
-        <el-button @click="indexChapter" :loading="indexing" :disabled="!currentChapter">
-          <el-icon><Collection /></el-icon>
-          索引当前章节
-        </el-button>
-        <el-button @click="saveContent" :loading="saving">
+        <el-button type="primary" @click="saveContent" :loading="saving">
           <el-icon><Save /></el-icon>
           保存
         </el-button>
       </div>
     </div>
 
-    <el-row :gutter="20">
-      <!-- 章节列表 -->
-      <el-col :span="6">
-        <el-card>
-          <template #header>
-            <div class="card-header">
-              <span>章节列表</span>
-              <el-button size="small" @click="showNewChapterDialog">
-                <el-icon><Plus /></el-icon>
-              </el-button>
-            </div>
-          </template>
-          <el-menu :default-active="currentChapter?.id?.toString()" @select="selectChapter">
-            <el-menu-item v-for="ch in chapters" :key="ch.id" :index="ch.id.toString()">
-              <span>第{{ ch.id }}章: {{ ch.title }}</span>
-            </el-menu-item>
-          </el-menu>
-        </el-card>
-
-        <!-- 伏笔面板 -->
-        <el-card class="foreshadow-panel" v-if="currentChapter">
-          <template #header>
-            <span>伏笔追踪</span>
-          </template>
-          <div v-for="fs in foreshadows" :key="fs.id" class="foreshadow-item">
-            <el-tag :type="fs.status === 'resolved' ? 'success' : 'warning'" size="small">
-              {{ fs.status }}
-            </el-tag>
-            <span>{{ fs.content }}</span>
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Left: Chapter List -->
+      <div class="sidebar-card">
+        <div class="card-header">
+          <span class="card-title">章节列表</span>
+          <el-button size="small" text @click="showNewChapterDialog">
+            <el-icon><Plus /></el-icon>
+          </el-button>
+        </div>
+        <div class="chapter-list">
+          <div
+            v-for="ch in chapters"
+            :key="ch.id"
+            :class="['chapter-item', { 'chapter-item--active': currentChapter?.id === ch.id }]"
+            @click="selectChapter(ch.id.toString())"
+          >
+            <span class="chapter-title">第{{ ch.id }}章: {{ ch.title }}</span>
+            <span class="chapter-status" v-if="ch.word_count">{{ ch.word_count }} 字</span>
           </div>
-        </el-card>
-      </el-col>
+        </div>
 
-      <!-- 编辑器 -->
-      <el-col :span="12">
-        <el-card>
-          <template #header>
-            <div class="card-header">
-              <span>第{{ currentChapter?.id }}章: {{ currentChapter?.title }}</span>
-              <el-tag v-if="wordCount > 0">{{ wordCount }} 字</el-tag>
+        <!-- Foreshadow Panel -->
+        <div class="foreshadow-section" v-if="currentChapter">
+          <div class="card-title">伏笔追踪</div>
+          <div class="foreshadow-list">
+            <div v-for="fs in foreshadows" :key="fs.id" class="foreshadow-item">
+              <el-tag :type="fs.status === 'resolved' ? 'success' : 'warning'" size="small">
+                {{ fs.status }}
+              </el-tag>
+              <span class="foreshadow-text">{{ fs.content }}</span>
             </div>
-          </template>
-          <el-input
-            v-model="content"
-            type="textarea"
-            :rows="20"
-            placeholder="在这里输入章节内容..."
-            @input="updateWordCount"
-          />
-        </el-card>
-      </el-col>
+            <div v-if="foreshadows.length === 0" class="empty-text">暂无伏笔数据</div>
+          </div>
+        </div>
+      </div>
 
-      <!-- 右侧面板 -->
-      <el-col :span="6">
-        <!-- 大纲 -->
-        <el-card v-if="currentChapter">
-          <template #header>
-            <span>章节大纲</span>
-          </template>
+      <!-- Center: Editor -->
+      <div class="editor-card" v-if="currentChapter">
+        <div class="editor-header">
+          <h3 class="editor-title">第{{ currentChapter.id }}章: {{ currentChapter.title }}</h3>
+          <span class="word-count" v-if="wordCount > 0">{{ wordCount }} 字</span>
+        </div>
+        <el-input
+          v-model="content"
+          type="textarea"
+          :rows="20"
+          class="editor-content"
+          placeholder="在这里输入章节内容..."
+          @input="updateWordCount"
+        />
+        <div class="editor-actions">
+          <el-button type="primary" @click="showGenerateDialog">
+            <el-icon><MagicStick /></el-icon>
+            AI 生成
+          </el-button>
+          <el-button type="success" @click="showContinueDialog">
+            <el-icon><Plus /></el-icon>
+            续写
+          </el-button>
+          <el-button round @click="review" :loading="reviewing">
+            <el-icon><DocumentChecked /></el-icon>
+            审稿
+          </el-button>
+          <el-button plain @click="indexChapter" :loading="indexing" :disabled="!currentChapter">
+            <el-icon><Collection /></el-icon>
+            索引
+          </el-button>
+        </div>
+      </div>
+      <div class="editor-card" v-else>
+        <div class="empty-editor">
+          <el-empty description="请选择章节开始写作" />
+        </div>
+      </div>
+
+      <!-- Right: Outline + Review -->
+      <div class="right-panel" v-if="currentChapter">
+        <!-- Chapter Outline -->
+        <div class="info-card">
+          <div class="card-title">章节大纲</div>
           <el-input
             v-model="currentChapter.outline"
             type="textarea"
             :rows="4"
             placeholder="章节大纲..."
           />
-        </el-card>
+        </div>
 
-        <!-- 审稿结果 -->
-        <el-card v-if="reviewResult" class="review-panel">
-          <template #header>
-            <div class="card-header">
-              <span>审稿结果</span>
-              <el-button size="small" @click="review" :loading="reviewing">重新审稿</el-button>
-            </div>
-          </template>
+        <!-- World Audit Button -->
+        <div class="info-card">
+          <div class="card-title">世界状态审计</div>
+          <el-button round @click="showWorldAuditDialog" :disabled="!currentChapter">
+            <el-icon><DataAnalysis /></el-icon>
+            查看审计
+          </el-button>
+        </div>
+
+        <!-- Review Result -->
+        <div class="info-card review-card" v-if="reviewResult">
+          <div class="card-header">
+            <span class="card-title">审稿结果</span>
+            <el-button size="small" text @click="review" :loading="reviewing">重新审稿</el-button>
+          </div>
           <div class="review-score">
-            综合评分:
+            <span class="score-label">综合评分:</span>
             <el-progress :percentage="reviewResult.overall_score" :color="getScoreColor(reviewResult.overall_score)" />
           </div>
 
+          <!-- Paragraph Issues -->
           <div v-if="reviewResult.paragraph_issues && reviewResult.paragraph_issues.length > 0" class="review-issues">
             <el-divider content-position="left">段落问题</el-divider>
             <el-collapse>
@@ -150,18 +161,19 @@
             </el-collapse>
           </div>
 
+          <!-- Overall Suggestions -->
           <div v-if="reviewResult.suggestions && reviewResult.suggestions.length > 0" class="review-suggestions">
             <el-divider content-position="left">整体建议</el-divider>
             <ul>
               <li v-for="(s, idx) in reviewResult.suggestions" :key="idx">{{ s }}</li>
             </ul>
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </div>
+      </div>
+    </div>
 
     <!-- AI 生成对话框 -->
-    <el-dialog v-model="generateDialogVisible" title="AI 生成章节" width="500px">
+    <el-dialog v-model="generateDialogVisible" title="AI 生成章节" width="500px" custom-class="apple-dialog">
       <el-form :model="generateParams" label-width="100px">
         <el-form-item label="章节号">
           <el-input-number v-model="generateParams.chapter_id" :min="1" />
@@ -182,7 +194,7 @@
     </el-dialog>
 
     <!-- 续写对话框 -->
-    <el-dialog v-model="continueDialogVisible" title="AI 续写章节" width="500px">
+    <el-dialog v-model="continueDialogVisible" title="AI 续写章节" width="500px" custom-class="apple-dialog">
       <el-form :model="continueParams" label-width="100px">
         <el-form-item label="续写字数">
           <el-input-number v-model="continueParams.write_words" :min="100" :max="5000" :step="100" />
@@ -200,7 +212,7 @@
     </el-dialog>
 
     <!-- 新建章节对话框 -->
-    <el-dialog v-model="newChapterDialogVisible" title="新建章节" width="400px">
+    <el-dialog v-model="newChapterDialogVisible" title="新建章节" width="400px" custom-class="apple-dialog">
       <el-form :model="newChapter" label-width="80px">
         <el-form-item label="章节标题">
           <el-input v-model="newChapter.title" />
@@ -216,7 +228,7 @@
     </el-dialog>
 
     <!-- 段落重绘对话框 -->
-    <el-dialog v-model="rewriteDialogVisible" title="段落重绘" width="600px">
+    <el-dialog v-model="rewriteDialogVisible" title="段落重绘" width="600px" custom-class="apple-dialog">
       <el-form label-width="80px">
         <el-form-item label="段落序号">
           <el-tag>段落 {{ rewriteParams.paragraph_index }}</el-tag>
@@ -243,7 +255,7 @@
     </el-dialog>
 
     <!-- 重绘结果对话框 -->
-    <el-dialog v-model="rewriteResultVisible" title="重绘结果" width="700px">
+    <el-dialog v-model="rewriteResultVisible" title="重绘结果" width="700px" custom-class="apple-dialog">
       <el-row :gutter="20">
         <el-col :span="12">
           <h4>原文</h4>
@@ -261,7 +273,7 @@
     </el-dialog>
 
     <!-- 段落管理对话框 -->
-    <el-dialog v-model="paragraphDialogVisible" title="段落管理" width="800px">
+    <el-dialog v-model="paragraphDialogVisible" title="段落管理" width="800px" custom-class="apple-dialog">
       <el-alert type="info" :closable="false" style="margin-bottom: 15px;">
         拖拽段落可调整顺序，点击操作按钮可删除或编辑段落
       </el-alert>
@@ -299,7 +311,7 @@
     </el-dialog>
 
     <!-- 编辑段落对话框 -->
-    <el-dialog v-model="editParagraphVisible" title="编辑段落" width="600px">
+    <el-dialog v-model="editParagraphVisible" title="编辑段落" width="600px" custom-class="apple-dialog">
       <el-input v-model="editParagraphContent" type="textarea" :rows="8" />
       <template #footer>
         <el-button @click="editParagraphVisible = false">取消</el-button>
@@ -768,50 +780,216 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 页面整体 */
 .writing-view {
+  background: #f5f5f7;
   max-width: 1400px;
   margin: 0 auto;
+  padding: 16px;
 }
 
+/* 页面头部 */
 .page-header {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 20px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
-.page-header h2 {
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1d1d1f;
   margin: 0;
+}
+
+.back-link {
+  color: #0071e3;
+}
+
+.back-link:hover {
+  color: #0066cc;
 }
 
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+}
+
+/* Main content layout */
+.main-content {
+  display: flex;
+  gap: 16px;
+}
+
+/* Sidebar card */
+.sidebar-card {
+  width: 240px;
+  flex-shrink: 0;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 16px;
 }
 
-.foreshadow-panel {
-  margin-top: 20px;
+.card-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+/* Chapter list */
+.chapter-list {
+  margin-bottom: 16px;
+}
+
+.chapter-item {
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: 1px solid transparent;
+}
+
+.chapter-item:hover {
+  background: #f5f5f7;
+}
+
+.chapter-item--active {
+  border-left: 4px solid #0071e3;
+  background: #f5f5f7;
+}
+
+.chapter-title {
+  font-size: 14px;
+  color: #1d1d1f;
+  display: block;
+}
+
+.chapter-status {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.48);
+  display: block;
+  margin-top: 4px;
+}
+
+/* Foreshadow section */
+.foreshadow-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.foreshadow-list {
+  margin-top: 12px;
 }
 
 .foreshadow-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 0;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
 }
 
-.review-panel {
-  margin-top: 20px;
+.foreshadow-text {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.8);
+  flex: 1;
+}
+
+.empty-text {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.48);
+  padding: 8px 0;
+}
+
+/* Editor card */
+.editor-card {
+  flex: 1;
+  min-width: 500px;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.editor-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin: 0;
+}
+
+.word-count {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.editor-content {
+  min-height: 320px;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.empty-editor {
+  padding: 60px 0;
+}
+
+/* Right panel */
+.right-panel {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.info-card {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.info-card .card-title {
+  margin-bottom: 12px;
+}
+
+/* Review card */
+.review-card {
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .review-score {
   margin-bottom: 15px;
+}
+
+.score-label {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.48);
 }
 
 .review-issues {
@@ -826,18 +1004,18 @@ onMounted(() => {
 
 .issue-detail {
   padding: 10px;
-  background: #f5f7fa;
+  background: #f5f5f7;
   border-radius: 4px;
 }
 
 .issue-desc {
   margin: 0 0 10px 0;
-  color: #303133;
+  color: #1d1d1f;
 }
 
 .issue-suggestion {
   margin: 0 0 10px 0;
-  color: #606266;
+  color: rgba(0, 0, 0, 0.8);
 }
 
 .issue-original {
@@ -855,11 +1033,13 @@ onMounted(() => {
 
 .review-suggestions li {
   margin: 5px 0;
-  color: #606266;
+  color: rgba(0, 0, 0, 0.8);
+  font-size: 13px;
 }
 
+/* Rewrite content preview */
 .rewrite-content {
-  background: #f5f7fa;
+  background: #f5f5f7;
   padding: 15px;
   border-radius: 4px;
   max-height: 300px;
@@ -867,5 +1047,111 @@ onMounted(() => {
   white-space: pre-wrap;
   font-size: 14px;
   line-height: 1.6;
+}
+
+/* Dialog styles - applied via custom-class */
+:deep(.apple-dialog) {
+  border-radius: 12px;
+}
+
+:deep(.apple-dialog .el-dialog__header) {
+  padding: 20px 24px 16px;
+}
+
+:deep(.apple-dialog .el-dialog__title) {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+:deep(.apple-dialog .el-dialog__body) {
+  padding: 16px 24px;
+}
+
+:deep(.apple-dialog .el-dialog__footer) {
+  padding: 16px 24px 20px;
+}
+
+:deep(.apple-dialog .el-button--primary) {
+  border-radius: 8px;
+}
+
+:deep(.apple-dialog .el-button.is-round) {
+  border-radius: 980px;
+}
+
+/* Element Plus component style overrides */
+:deep(.el-button--primary) {
+  border-radius: 8px;
+}
+
+:deep(.el-button--success) {
+  border-radius: 8px;
+}
+
+:deep(.el-button.is-round) {
+  border-radius: 980px;
+}
+
+:deep(.el-button.is-text) {
+  color: #0071e3;
+}
+
+:deep(.el-button.is-plain) {
+  border-radius: 8px;
+}
+
+:deep(.el-card) {
+  border-radius: 8px;
+  border: none;
+  box-shadow: none;
+}
+
+:deep(.el-input__wrapper) {
+  border-radius: 4px;
+}
+
+:deep(.el-textarea__inner) {
+  border-radius: 8px;
+  background: #f5f5f7;
+}
+
+:deep(.el-menu) {
+  border: none;
+}
+
+:deep(.el-menu-item) {
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+:deep(.el-menu-item.is-active) {
+  background: #f5f5f7;
+  border-left: 4px solid #0071e3;
+}
+
+:deep(.el-progress-bar__outer) {
+  border-radius: 100px;
+}
+
+:deep(.el-progress-bar__inner) {
+  border-radius: 100px;
+}
+
+:deep(.el-divider__text) {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+:deep(.el-tag) {
+  border-radius: 4px;
+}
+
+:deep(.el-collapse-item__header) {
+  font-size: 13px;
+}
+
+:deep(.el-collapse-item__content) {
+  padding-bottom: 8px;
 }
 </style>
