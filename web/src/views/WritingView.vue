@@ -548,9 +548,27 @@ const loadChapters = async () => {
 }
 
 const selectChapter = async (chapterId) => {
+  // 先从列表中找到章节基本信息
   const ch = chapters.value.find(c => c.id.toString() === chapterId)
   if (ch) {
-    currentChapter.value = ch
+    // 重新获取章节的最新数据（包括可能从架构师导入的outline）
+    try {
+      const chapterRes = await chapterApi.get(bookId.value, ch.id)
+      if (chapterRes.data) {
+        // 更新列表中的章节数据
+        const idx = chapters.value.findIndex(c => c.id.toString() === chapterId)
+        if (idx >= 0) {
+          chapters.value[idx] = chapterRes.data
+        }
+        currentChapter.value = chapterRes.data
+      } else {
+        currentChapter.value = ch
+      }
+    } catch (error) {
+      // 如果获取失败，使用列表中的数据
+      currentChapter.value = ch
+    }
+
     try {
       const res = await chapterApi.getContent(bookId.value, ch.id)
       content.value = res.data?.content || ''
