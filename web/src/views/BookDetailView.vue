@@ -93,10 +93,12 @@
             <el-table-column prop="title" label="标题" />
             <el-table-column prop="outline" label="大纲" show-overflow-tooltip />
             <el-table-column prop="word_count" label="字数" width="100" />
-            <el-table-column label="操作" width="120">
+            <el-table-column label="操作" width="140">
               <template #default="{ row }">
-                <el-button size="small" @click="openChapter(row.id)">查看</el-button>
-                <el-button size="small" type="danger" @click="deleteChapter(row.id)">删除</el-button>
+                <el-button-group>
+                  <el-button size="small" @click="openChapter(row.id)">查看</el-button>
+                  <el-button size="small" type="danger" @click="deleteChapter(row.id)">删除</el-button>
+                </el-button-group>
               </template>
             </el-table-column>
           </el-table>
