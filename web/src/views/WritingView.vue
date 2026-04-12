@@ -97,14 +97,15 @@
 
       <!-- Right: Outline + Review -->
       <div class="right-panel" v-if="currentChapter">
-        <!-- Chapter Outline (simple mode) -->
-        <div class="info-card" v-if="!isDetailOutline">
+        <!-- 章节大纲（简要梗概） -->
+        <div class="info-card">
           <div class="card-title">章节大纲</div>
           <el-input
-            v-model="currentChapter.outline"
+            v-model="briefOutline"
             type="textarea"
-            :rows="4"
-            placeholder="章节大纲..."
+            :rows="3"
+            placeholder="章节大纲梗概..."
+            readonly
           />
         </div>
 
@@ -154,6 +155,13 @@
               <h5>伏笔设置</h5>
               <ul class="detail-list">
                 <li v-for="(f, idx) in parsedDetail.foreshadows" :key="idx">{{ f }}</li>
+              </ul>
+            </div>
+            <!-- Emotions -->
+            <div v-if="parsedDetail.emotions && parsedDetail.emotions.length > 0" class="detail-section">
+              <h5>情感变化</h5>
+              <ul class="detail-list">
+                <li v-for="(e, idx) in parsedDetail.emotions" :key="idx">{{ e }}</li>
               </ul>
             </div>
             <!-- Word Target -->
@@ -461,6 +469,38 @@ const isDetailOutline = computed(() => {
          currentChapter.value.outline.includes('【章节：')
 })
 
+// 提取简要大纲（章节梗概）
+const briefOutline = computed(() => {
+  if (!currentChapter.value?.outline) return ''
+
+  const outline = currentChapter.value.outline
+
+  // 如果是细纲格式，提取章节名和梗概（第一个场景的事件作为梗概）
+  if (outline.includes('【场景设计】') || outline.includes('【章节：')) {
+    // 提取章节名
+    const titleMatch = outline.match(/【章节[：:](.+?)】/)
+    const chapterTitle = titleMatch?.[1]?.trim() || ''
+
+    // 提取第一个场景的事件作为梗概
+    const sceneMatch = outline.match(/【场景设计】\n([\s\S]*?)(?=\n【|$)/)
+    if (sceneMatch) {
+      const sceneText = sceneMatch[1]
+      // 尝试提取第一个场景的事件
+      const firstEventMatch = sceneText.match(/场景1:[^\n]*\n[\s\S]*?事件[：:]\s*(.+?)(?:\n|$)/)
+      if (firstEventMatch) {
+        const event = firstEventMatch[1].trim()
+        return chapterTitle ? `${chapterTitle}：${event}` : event
+      }
+    }
+
+    // 如果没有找到事件，返回章节名
+    return chapterTitle || '细纲已导入'
+  }
+
+  // 普通大纲格式，直接返回
+  return outline
+})
+
 // 解析细纲内容
 const parsedDetail = computed(() => {
   if (!currentChapter.value?.outline) return {}
@@ -640,12 +680,26 @@ const generate = async () => {
   })
 
   // 监听 done 事件
-  eventSource.addEventListener('done', (event) => {
+  eventSource.addEventListener('done', async (event) => {
     eventSource.close()
     generating.value = false
     generateDialogVisible.value = false
     updateWordCount()
     ElMessage.success('内容生成成功')
+    // 自动保存生成的内容
+    try {
+      await chapterApi.saveContent(bookId.value, currentChapter.value.id, content.value)
+      // 保存后自动索引
+      try {
+        await vectorApi.indexChapter(bookId.value, currentChapter.value.id)
+      } catch (e) {
+        console.warn('自动索引失败:', e)
+      }
+      ElMessage.success('已自动保存')
+    } catch (e) {
+      console.warn('自动保存失败:', e)
+      ElMessage.warning('生成成功但保存失败，请手动保存')
+    }
   })
 
   // 监听 error 事件
@@ -661,13 +715,26 @@ const generate = async () => {
   })
 
   // 兼容旧的 onmessage 处理
-  eventSource.onmessage = (event) => {
+  eventSource.onmessage = async (event) => {
     if (event.data === '生成完成' || event.data === '[DONE]') {
       eventSource.close()
       generating.value = false
       generateDialogVisible.value = false
       updateWordCount()
       ElMessage.success('内容生成成功')
+      // 自动保存生成的内容
+      try {
+        await chapterApi.saveContent(bookId.value, currentChapter.value.id, content.value)
+        try {
+          await vectorApi.indexChapter(bookId.value, currentChapter.value.id)
+        } catch (e) {
+          console.warn('自动索引失败:', e)
+        }
+        ElMessage.success('已自动保存')
+      } catch (e) {
+        console.warn('自动保存失败:', e)
+        ElMessage.warning('生成成功但保存失败，请手动保存')
+      }
       return
     }
 
