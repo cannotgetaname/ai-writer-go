@@ -199,13 +199,58 @@
           <el-button type="primary" @click="saveGoals">保存目标</el-button>
         </el-card>
       </el-tab-pane>
+
+      <!-- 版本管理 -->
+      <el-tab-pane label="版本管理" name="version">
+        <el-card>
+          <div class="version-info">
+            <span>当前版本: <el-tag>v{{ versionInfo.version }}</el-tag></span>
+            <span>系统: {{ versionInfo.os }} / {{ versionInfo.arch }}</span>
+          </div>
+
+          <div class="update-actions" style="margin-top: 16px;">
+            <el-select v-model="updateSource" style="width: 150px; margin-right: 10px;">
+              <el-option label="自动选择" value="auto" />
+              <el-option label="GitHub" value="github" />
+              <el-option label="Gitee" value="gitee" />
+            </el-select>
+
+            <el-button @click="checkUpdate" :loading="checkingUpdate">
+              检查更新
+            </el-button>
+          </div>
+
+          <!-- 更新信息显示 -->
+          <div v-if="updateInfo" class="update-info" style="margin-top: 16px;">
+            <el-alert v-if="updateInfo.has_update" type="success" :closable="false">
+              发现新版本: v{{ updateInfo.latest_version }}
+            </el-alert>
+            <el-alert v-else type="info" :closable="false">
+              已是最新版本
+            </el-alert>
+
+            <div v-if="updateInfo.has_update" class="update-detail" style="margin-top: 16px;">
+              <div class="changelog">
+                <h4 style="margin-bottom: 8px;">更新日志</h4>
+                <div class="changelog-content" style="background: #f5f5f7; padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto;">
+                  {{ updateInfo.changelog || '暂无更新说明' }}
+                </div>
+              </div>
+
+              <el-button type="primary" @click="startUpdate" :loading="updating" style="margin-top: 16px;">
+                更新到 v{{ updateInfo.latest_version }}
+              </el-button>
+            </div>
+          </div>
+        </el-card>
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { systemApi } from '@/api'
 
 const activeTab = ref('config')
@@ -426,11 +471,63 @@ const savePrompts = async () => {
   }
 }
 
+// 版本管理
+const versionInfo = ref({ version: '1.4.2', os: '', arch: '' })
+const updateSource = ref('auto')
+const checkingUpdate = ref(false)
+const updateInfo = ref(null)
+const updating = ref(false)
+
+const loadVersion = async () => {
+  try {
+    const res = await systemApi.getVersion()
+    versionInfo.value = {
+      version: res.data.version,
+      os: res.data.os,
+      arch: res.data.arch
+    }
+  } catch (e) {
+    console.error('Failed to load version:', e)
+  }
+}
+
+const checkUpdate = async () => {
+  checkingUpdate.value = true
+  try {
+    const res = await systemApi.checkUpdate(updateSource.value)
+    updateInfo.value = res.data
+  } catch (e) {
+    ElMessage.error('检查更新失败: ' + (e.response?.data?.error || e.message))
+  }
+  checkingUpdate.value = false
+}
+
+const startUpdate = async () => {
+  updating.value = true
+  try {
+    const res = await systemApi.startUpdate({
+      source: updateSource.value,
+      version: updateInfo.value.latest_version,
+      url: updateInfo.value.download_url
+    })
+    ElMessage.success(res.data.message)
+    ElMessageBox.alert(
+      '更新程序已启动。请关闭应用后重新启动以完成更新。',
+      '更新提示',
+      { confirmButtonText: '我知道了' }
+    )
+  } catch (e) {
+    ElMessage.error('启动更新失败: ' + (e.response?.data?.error || e.message))
+  }
+  updating.value = false
+}
+
 onMounted(() => {
   loadConfig()
   loadBilling()
   loadGoals()
   loadPrompts()
+  loadVersion()
 })
 </script>
 
