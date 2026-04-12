@@ -9,7 +9,7 @@ import (
 )
 
 // Version 当前版本号（可通过 SetVersion 设置）
-var Version = "1.5.0"
+var Version = "1.5.1"
 
 // SetVersion 设置版本号（用于 ldflags 注入）
 func SetVersion(v string) {

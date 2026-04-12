@@ -1062,6 +1062,13 @@ const importToWriting = async () => {
       return
     }
 
+    // 检查 chapter.id 是否是有效的数字 ID（不是字符串如 'chap_0_1'）
+    if (typeof chapter.id === 'string' && chapter.id.startsWith('chap_')) {
+      ElMessage.warning('请先点击"保存为章节"按钮，将大纲保存后再导入细纲')
+      importing.value = false
+      return
+    }
+
     // Convert chapter detail to outline text
     const outlineText = generateOutlineFromDetail(chapterDetail.value, chapter)
 
@@ -1174,7 +1181,27 @@ const saveOutline = async () => {
       book_name: bookName.value,
       volumes: volumeResults.value
     })
-    ElMessage.success('大纲已保存为章节')
+    // 保存成功后重新加载章节数据，更新 volumeResults 中的 chapter.id 为实际 ID
+    const chaptersRes = await chapterApi.list(bookName.value)
+    const savedChapters = chaptersRes.data || []
+
+    // 更新 volumeResults 中每个章节的 id 为数据库中的实际 ID
+    let chapterIdx = 0
+    for (let vIdx = 0; vIdx < volumeResults.value.length; vIdx++) {
+      const vol = volumeResults.value[vIdx]
+      if (vol.chapters && vol.chapters.length > 0) {
+        for (let cIdx = 0; cIdx < vol.chapters.length; cIdx++) {
+          if (chapterIdx < savedChapters.length) {
+            vol.chapters[cIdx].id = savedChapters[chapterIdx].id
+            chapterIdx++
+          }
+        }
+      }
+    }
+
+    // 保存更新后的数据
+    await saveArchitectData()
+    ElMessage.success('大纲已保存为章节，现在可以导入细纲到写作页面')
   } catch (error) {
     ElMessage.error('保存失败: ' + (error.response?.data?.error || error.message))
   }
@@ -1216,6 +1243,8 @@ const loadArchitectData = async () => {
       }
       if (res.data.volumes && res.data.volumes.length > 0) {
         volumeResults.value = res.data.volumes
+        // 同步真实的章节 ID（如果大纲已保存）
+        syncChapterIds()
       }
       if (res.data.chapter_details) {
         chapterDetails.value = res.data.chapter_details
@@ -1228,6 +1257,36 @@ const loadArchitectData = async () => {
     }
   } catch (error) {
     console.error('加载架构师数据失败:', error)
+  }
+}
+
+// 同步真实的章节 ID（从数据库加载）
+const syncChapterIds = async () => {
+  if (!bookName.value || volumeResults.value.length === 0) return
+  try {
+    const chaptersRes = await chapterApi.list(bookName.value)
+    const savedChapters = chaptersRes.data || []
+
+    if (savedChapters.length > 0) {
+      // 更新 volumeResults 中每个章节的 id 为数据库中的实际 ID
+      let chapterIdx = 0
+      for (let vIdx = 0; vIdx < volumeResults.value.length; vIdx++) {
+        const vol = volumeResults.value[vIdx]
+        if (vol.chapters && vol.chapters.length > 0) {
+          for (let cIdx = 0; cIdx < vol.chapters.length; cIdx++) {
+            if (chapterIdx < savedChapters.length) {
+              // 如果当前 id 是字符串（如 chap_0_1），替换为真实 ID
+              if (typeof vol.chapters[cIdx].id === 'string' && vol.chapters[cIdx].id.startsWith('chap_')) {
+                vol.chapters[cIdx].id = savedChapters[chapterIdx].id
+              }
+              chapterIdx++
+            }
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('同步章节 ID 失败:', error)
   }
 }
 
