@@ -264,6 +264,11 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			system.GET("/goals", handler.GetWritingGoals)
 			system.PUT("/goals", handler.UpdateWritingGoals)
 			system.GET("/ollama/models", handler.GetOllamaModels)
+			// 更新相关
+			updateHandler := handler.NewUpdateHandler(cfg)
+			system.GET("/version", updateHandler.GetVersion)
+			system.POST("/update/check", updateHandler.CheckUpdate)
+			system.POST("/update/start", updateHandler.StartUpdate)
 		}
 
 		// 向量存储
