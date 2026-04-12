@@ -26,6 +26,7 @@
                 系统设置
               </el-menu-item>
             </el-menu>
+            <UpdateBadge />
           </div>
         </el-header>
         <el-main>
@@ -40,6 +41,8 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import { EditPen, Folder, MagicStick, Reading, Setting } from '@element-plus/icons-vue'
+import UpdateBadge from '@/components/UpdateBadge.vue'
 
 const router = useRouter()
 const activeMenu = computed(() => {
