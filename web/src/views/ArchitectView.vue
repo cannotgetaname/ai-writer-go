@@ -465,6 +465,11 @@
           <!-- Step 4: Chapter Detail Content -->
           <div v-if="currentStep === 4" class="step-content">
             <div v-if="chapterDetail" class="result-section">
+              <div class="result-header" style="margin-bottom: 12px;">
+                <el-button size="small" type="success" @click="importToWriting" :loading="importing">
+                  导入到写作
+                </el-button>
+              </div>
               <el-descriptions :column="1" border size="small">
                 <el-descriptions-item label="目标字数">{{ chapterDetail.word_target }}</el-descriptions-item>
               </el-descriptions>
@@ -541,7 +546,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import { architectApi } from '@/api'
+import { architectApi, chapterApi } from '@/api'
 import ArchitectStepCard from '@/components/ArchitectStepCard.vue'
 import ArchitectWorkspace from '@/components/ArchitectWorkspace.vue'
 
@@ -586,6 +591,7 @@ const worldViewResult = ref(null)
 const volumeResults = ref([])
 const chapterDetail = ref(null)
 const chapterDetails = ref({}) // key: "volIdx_chapIdx"
+const importing = ref(false)
 
 // Chapter options for cascader
 const chapterOptions = computed(() => {
@@ -1036,6 +1042,94 @@ const viewChapterDetail = (key) => {
   chapterDetail.value = chapterDetails.value[key]
 }
 
+// Import chapter detail to writing page (as chapter outline)
+const importToWriting = async () => {
+  if (!chapterDetail.value || !selectedChapterPath.value || selectedChapterPath.value.length < 2) {
+    ElMessage.warning('请先选择章节并生成细纲')
+    return
+  }
+
+  importing.value = true
+  try {
+    const [volId, chapId] = selectedChapterPath.value
+    const vIdx = parseInt(volId.split('_')[1])
+    const cIdx = parseInt(chapId.split('_')[1])
+    const chapter = volumeResults.value[vIdx]?.chapters?.[cIdx]
+
+    if (!chapter || !chapter.id) {
+      ElMessage.error('找不到章节信息')
+      importing.value = false
+      return
+    }
+
+    // Convert chapter detail to outline text
+    const outlineText = generateOutlineFromDetail(chapterDetail.value, chapter)
+
+    // Update chapter outline
+    await chapterApi.update(bookName.value, chapter.id, {
+      outline: outlineText
+    })
+
+    ElMessage.success('已导入到写作页面，可前往写作查看')
+  } catch (error) {
+    ElMessage.error('导入失败: ' + (error.response?.data?.error || error.message))
+  }
+  importing.value = false
+}
+
+// Generate outline text from chapter detail
+const generateOutlineFromDetail = (detail, chapter) => {
+  let outline = `【章节：${chapter.title || '未命名'}】\n\n`
+
+  if (detail.scenes && detail.scenes.length > 0) {
+    outline += `【场景设计】\n`
+    detail.scenes.forEach((scene, idx) => {
+      outline += `场景${idx + 1}: ${scene.location}\n`
+      outline += `  - 人物: ${scene.characters}\n`
+      outline += `  - 事件: ${scene.event}\n`
+      outline += `  - 氛围: ${scene.mood}\n\n`
+    })
+  }
+
+  if (detail.dialogues && detail.dialogues.length > 0) {
+    outline += `【关键对话】\n`
+    detail.dialogues.forEach(d => {
+      outline += `- ${d}\n`
+    })
+    outline += '\n'
+  }
+
+  if (detail.actions && detail.actions.length > 0) {
+    outline += `【动作设计】\n`
+    detail.actions.forEach(a => {
+      outline += `- ${a}\n`
+    })
+    outline += '\n'
+  }
+
+  if (detail.foreshadows && detail.foreshadows.length > 0) {
+    outline += `【伏笔设置】\n`
+    detail.foreshadows.forEach(f => {
+      outline += `- ${f}\n`
+    })
+    outline += '\n'
+  }
+
+  if (detail.emotions && detail.emotions.length > 0) {
+    outline += `【情感变化】\n`
+    detail.emotions.forEach(e => {
+      outline += `- ${e}\n`
+    })
+    outline += '\n'
+  }
+
+  if (detail.word_target) {
+    outline += `【目标字数】${detail.word_target}字\n`
+  }
+
+  return outline
+}
+
 // Save worldview to book settings
 const saveWorldView = async () => {
   if (!worldViewResult.value) return
@@ -1139,6 +1233,17 @@ const loadArchitectData = async () => {
 
 // Restore current step based on data completeness
 const restoreCurrentStep = () => {
+  // If there are outdated steps, keep the current step from saved data
+  if (outdatedSteps.value.size > 0) {
+    // Find the minimum outdated step as a reference
+    const minOutdated = Math.min(...Array.from(outdatedSteps.value))
+    // Set current step to the step just before the first outdated step
+    // This ensures user sees what needs to be regenerated
+    currentStep.value = Math.max(0, minOutdated - 1)
+    return
+  }
+
+  // Otherwise, restore based on completion
   if (volumeResults.value.length > 0) {
     const hasChapters = volumeResults.value.some(v => v.chapters && v.chapters.length > 0)
     const allExpanded = volumeResults.value.every(v => v.chapters && v.chapters.length > 0)
@@ -1161,7 +1266,7 @@ const restoreCurrentStep = () => {
 
 // Auto-save on data changes
 watch(
-  [synopsisResult, worldViewResult, volumeResults, chapterDetails],
+  [synopsisResult, worldViewResult, volumeResults, chapterDetails, outdatedSteps],
   () => {
     if (synopsisResult.value || worldViewResult.value || volumeResults.value.length > 0 || Object.keys(chapterDetails.value).length > 0) {
       saveArchitectData()
@@ -1169,6 +1274,27 @@ watch(
   },
   { deep: true }
 )
+
+// Watch selectedChapterPath to auto-show existing chapter detail
+watch(selectedChapterPath, (newPath) => {
+  if (currentStep.value === 4 && newPath && newPath.length >= 2) {
+    const [volId, chapId] = newPath
+    const vIdx = parseInt(volId.split('_')[1])
+    const cIdx = parseInt(chapId.split('_')[1])
+    const key = `${vIdx}_${cIdx}`
+
+    // Check if chapter detail already exists
+    if (chapterDetails.value[key]) {
+      chapterDetail.value = chapterDetails.value[key]
+    } else {
+      // Clear current detail if no existing detail
+      chapterDetail.value = null
+    }
+  } else if (currentStep.value === 4 && !newPath) {
+    // Clear detail when selection is cleared
+    chapterDetail.value = null
+  }
+})
 
 // Initialize on mount
 onMounted(() => {
